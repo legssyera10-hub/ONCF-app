@@ -1,0 +1,43 @@
+# Python
+.venv/
+backend/.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
+
+# Environnement
+.env
+.env.*
+backend/.env
+frontend/.env
+!.env.example
+!backend/.env.example
+!frontend/.env.example
+
+# Bases de donnees et backups locaux
+*.db
+*.sqlite
+*.sqlite3
+backend/*.db
+oncf_demo.db
+backend/oncf_demo.backup_before_delete_*.db
+
+# Uploads / fichiers temporaires
+uploads/
+backend/uploads/
+*.log
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+*.lnk

@@ -1,0 +1,5 @@
+LOAD DATABASE
+     FROM sqlite:///data/oncf_demo.db
+     INTO postgresql://oncf:oncf@host.docker.internal:5432/oncf_demo
+
+ WITH data only, reset sequences, workers = 4, concurrency = 1;
