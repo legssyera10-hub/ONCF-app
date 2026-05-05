@@ -6,7 +6,7 @@ import { useAuth } from "../hooks/useAuth";
 import type { AdminUserDetail, Alert, AlertStatus, Establishment, Role } from "../types";
 import { formatDateTime } from "../utils/format";
 
-const roleOptions: Role[] = ["ADMIN", "PERMANENT", "ETABLISSEMENT", "SUIVI"];
+const roleOptions: Role[] = ["ADMIN", "PERMANENT", "ETABLISSEMENT", "PROJET", "SUIVI"];
 
 type HistoryGroup = {
   alertId: number;
@@ -24,14 +24,16 @@ function getHistoryTitle(role: Role) {
   if (role === "AGENT") return "Demandes d'acheminement creees";
   if (role === "PERMANENT") return "Demandes d'acheminement traitees";
   if (role === "ETABLISSEMENT") return "Demandes creees et receptions du technicentre";
+  if (role === "PROJET") return "Demandes d'essai en ligne creees";
   if (role === "SUIVI") return "Demandes suivies par le compte de visionnement";
   return "Dossiers lies a ce compte";
 }
 
 function getRoleLabel(role: Role) {
   if (role === "AGENT") return "Technicentre";
-  if (role === "PERMANENT") return "Permanent PM";
+  if (role === "PERMANENT") return "Permanent PPM";
   if (role === "ETABLISSEMENT") return "Technicentre";
+  if (role === "PROJET") return "Projet";
   if (role === "SUIVI") return "Visionnement demandes";
   return "Admin";
 }

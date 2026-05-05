@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import datetime
 from email.message import EmailMessage
@@ -531,15 +531,15 @@ def compose_decision_mail(alert: Alert, decision_label: str, commentaire: Option
     state = _status_state_label(alert.status)
 
     if decision_label == "MODIFIER":
-        intro = "Le permanent PM demande une modification de ce dossier."
+        intro = "Le permanent PPM demande une modification de ce dossier."
     elif decision_label == "ANNULER":
-        intro = "Le permanent PM a annule ce dossier."
+        intro = "Le permanent PPM a annule ce dossier."
     else:
-        intro = "Le permanent PM a traite la demande (acceptation et/ou annulation de materiels)."
+        intro = "Le permanent PPM a traite la demande (acceptation et/ou annulation de materiels)."
 
     intro_lines = [intro]
     if commentaire and commentaire.strip():
-        intro_lines.append(f"Commentaire PM: {commentaire.strip()}")
+        intro_lines.append(f"Commentaire PPM: {commentaire.strip()}")
     intro_lines.append("Le tableau ci-dessous reprend le detail complet du dossier.")
 
     return _mail_payload(
@@ -560,16 +560,16 @@ def compose_exploitant_decision_mail(
     state = _status_state_label(alert.status)
 
     if decision_label == "MODIFIER":
-        intro = "Le permanent PM demande une modification de ce dossier."
+        intro = "Le permanent PPM demande une modification de ce dossier."
     elif decision_label == "ANNULER":
-        intro = "Le permanent PM a annule ce dossier."
+        intro = "Le permanent PPM a annule ce dossier."
     else:
-        intro = "Le permanent PM a traite la demande (acceptation et/ou annulation de materiels)."
+        intro = "Le permanent PPM a traite la demande (acceptation et/ou annulation de materiels)."
 
     intro_lines = [intro]
     if commentaire and commentaire.strip():
-        intro_lines.append(f"Commentaire PM: {commentaire.strip()}")
-    intro_lines.append("Le tableau ci-dessous reprend uniquement les materiels acceptes par le permanent PM.")
+        intro_lines.append(f"Commentaire PPM: {commentaire.strip()}")
+    intro_lines.append("Le tableau ci-dessous reprend uniquement les materiels acceptes par le permanent PPM.")
 
     return _mail_payload(
         alert=alert,

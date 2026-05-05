@@ -1,27 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { AlertRequestDetailsGrid, DossierRouteText } from "../components/AlertRequestDetailsGrid";
 import { GeneratePdfButton } from "../components/GeneratePdfButton";
-import { PageBreadcrumbs } from "../components/PageBreadcrumbs";
 import { StatusBadge } from "../components/StatusBadge";
 import { useAuth } from "../hooks/useAuth";
 import type { Alert } from "../types";
 import { getPermanentDecisionReason } from "../utils/alertHistory";
 
-type DetailLocationState = {
-  returnTo?: string;
-};
-
 export function AgentAlertDetailPage() {
   const { token } = useAuth();
   const { id } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
-  const locationState = location.state as DetailLocationState | null;
   const [alert, setAlert] = useState<Alert | null>(null);
   const [mineAlerts, setMineAlerts] = useState<Alert[]>([]);
-  const returnTo = locationState?.returnTo ?? "/technicentre/demande";
 
   useEffect(() => {
     if (!token || !id) {
@@ -32,13 +24,6 @@ export function AgentAlertDetailPage() {
       setMineAlerts(mineResult);
     });
   }, [token, id]);
-
-  const returnLabel = useMemo(() => {
-    if (returnTo.includes("/modifications")) {
-      return "Demandes a modifier";
-    }
-    return returnTo.includes("/history") ? "Historique" : "Demandes";
-  }, [returnTo]);
 
   if (!alert) {
     return <div className="panel p-6 text-sm text-slate-500">Chargement...</div>;
@@ -56,19 +41,7 @@ export function AgentAlertDetailPage() {
   return (
     <div className="space-y-6">
       <section className="panel p-6">
-        <PageBreadcrumbs
-          items={[
-            { label: "Technicentre", to: "/technicentre" },
-            { label: "Demande", to: "/technicentre/demande" },
-            { label: returnLabel, to: returnTo },
-            { label: "Detail" },
-          ]}
-        />
-
-        <div className="mt-5 space-y-4">
-          <button type="button" onClick={() => navigate(returnTo)} className="btn-secondary">
-            Retour
-          </button>
+        <div className="space-y-4">
           <div className="flex w-full flex-wrap items-center gap-4">
             <h2 className="min-w-0 flex-1 text-3xl font-semibold tracking-tight text-slate-950">
               Dossier #{alert.dossier_label ?? alert.id} - <DossierRouteText alert={alert} />

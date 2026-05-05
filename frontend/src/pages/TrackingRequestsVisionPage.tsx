@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
 import {
   getRequesterLabel,
@@ -849,7 +849,7 @@ export function TrackingRequestsVisionPage() {
           </div>
 
           <div className="rounded-[1.4rem] border border-fuchsia-200 bg-white p-4 shadow-sm md:col-span-2">
-            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Section permanent PM</p>
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Section permanent PPM</p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
                 <p className="text-xs uppercase tracking-[0.18em] text-emerald-700">Acceptee</p>

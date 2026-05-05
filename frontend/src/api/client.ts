@@ -9,6 +9,7 @@ import type {
   AuthResponse,
   Establishment,
   Notification,
+  OnlineTrial,
   Station,
   User,
 } from "../types";
@@ -102,6 +103,17 @@ export const api = {
   notifications: (token: string) => request<Notification[]>("/notifications", { token }),
   confirmReception: (token: string, id: number, payload: unknown) =>
     request<Alert>(`/alerts/${id}/confirm`, { method: "POST", body: JSON.stringify(payload), token }),
+  onlineTrialFormConfig: (token: string) => request<AdminAlertFormConfig>("/online-trial-form-config", { token }),
+  onlineTrials: (token: string, query = "") => request<OnlineTrial[]>(`/online-trials${query}`, { token }),
+  onlineTrialById: (token: string, id: number) => request<OnlineTrial>(`/online-trials/${id}`, { token }),
+  createOnlineTrial: (token: string, payload: unknown) =>
+    request<OnlineTrial>("/online-trials", { method: "POST", body: payload as FormData, token }),
+  updateOnlineTrial: (token: string, id: number, payload: unknown) =>
+    request<OnlineTrial>(`/online-trials/${id}`, { method: "PUT", body: JSON.stringify(payload), token }),
+  createOnlineTrialDecision: (token: string, id: number, payload: unknown) =>
+    request<OnlineTrial>(`/online-trials/${id}/decision`, { method: "POST", body: JSON.stringify(payload), token }),
+  updateOnlineTrialProgress: (token: string, id: number, payload: unknown) =>
+    request<OnlineTrial>(`/online-trials/${id}/progress`, { method: "POST", body: JSON.stringify(payload), token }),
   adminUsers: (token: string) => request<AdminUser[]>("/admin/users", { token }),
   adminUserDetail: (token: string, id: number) => request<AdminUserDetail>(`/admin/users/${id}`, { token }),
   createAdminUser: (token: string, payload: unknown) =>

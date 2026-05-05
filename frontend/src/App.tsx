@@ -18,8 +18,15 @@ import {
   loadNewAlertPage,
   loadPermanentAlertDetailPage,
   loadPermanentDashboard,
+  loadPermanentOnlineTrialDashboardPage,
+  loadPermanentOnlineTrialDetailPage,
   loadPermanentMapPage,
+  loadOnlineTrialDashboardPage,
+  loadOnlineTrialDetailPage,
+  loadOnlineTrialHistoryPage,
+  loadOnlineTrialNewPage,
   loadTechnicentreDemandPage,
+  loadTechnicentreAcheminementsPage,
   loadTechnicentreHomePage,
   loadTechnicentreModificationRequestsPage,
   loadTechnicentreReceptionDetailPage,
@@ -28,6 +35,8 @@ import {
   loadTechnicentreRequestHistoryPage,
   loadTrackingReceptionQualityPage,
   loadTrackingRequestsVisionPage,
+  loadTrackingOnlineTrialsPage,
+  loadTrackingOnlineTrialsPerformancePage,
 } from "./routes/lazyRoutes";
 
 const AgentAlertDetailPage = lazy(loadAgentAlertDetailPage);
@@ -43,8 +52,15 @@ const LoginPage = lazy(loadLoginPage);
 const NewAlertPage = lazy(loadNewAlertPage);
 const PermanentAlertDetailPage = lazy(loadPermanentAlertDetailPage);
 const PermanentDashboard = lazy(loadPermanentDashboard);
+const PermanentOnlineTrialDashboardPage = lazy(loadPermanentOnlineTrialDashboardPage);
+const PermanentOnlineTrialDetailPage = lazy(loadPermanentOnlineTrialDetailPage);
 const PermanentMapPage = lazy(loadPermanentMapPage);
+const OnlineTrialDashboardPage = lazy(loadOnlineTrialDashboardPage);
+const OnlineTrialDetailPage = lazy(loadOnlineTrialDetailPage);
+const OnlineTrialHistoryPage = lazy(loadOnlineTrialHistoryPage);
+const OnlineTrialNewPage = lazy(loadOnlineTrialNewPage);
 const TechnicentreDemandPage = lazy(loadTechnicentreDemandPage);
+const TechnicentreAcheminementsPage = lazy(loadTechnicentreAcheminementsPage);
 const TechnicentreHomePage = lazy(loadTechnicentreHomePage);
 const TechnicentreModificationRequestsPage = lazy(loadTechnicentreModificationRequestsPage);
 const TechnicentreReceptionDetailPage = lazy(loadTechnicentreReceptionDetailPage);
@@ -53,6 +69,8 @@ const TechnicentreReceptionListPage = lazy(loadTechnicentreReceptionListPage);
 const TechnicentreRequestHistoryPage = lazy(loadTechnicentreRequestHistoryPage);
 const TrackingReceptionQualityPage = lazy(loadTrackingReceptionQualityPage);
 const TrackingRequestsVisionPage = lazy(loadTrackingRequestsVisionPage);
+const TrackingOnlineTrialsPage = lazy(loadTrackingOnlineTrialsPage);
+const TrackingOnlineTrialsPerformancePage = lazy(loadTrackingOnlineTrialsPerformancePage);
 
 function RouteFallback() {
   return <PageSkeleton />;
@@ -67,7 +85,7 @@ function RequireAuth({
   roles,
 }: {
   children: ReactNode;
-  roles?: Array<"AGENT" | "PERMANENT" | "ETABLISSEMENT" | "ADMIN" | "SUIVI">;
+  roles?: Array<"AGENT" | "PERMANENT" | "ETABLISSEMENT" | "PROJET" | "ADMIN" | "SUIVI">;
 }) {
   const { user, token, ready } = useAuth();
   if (!ready) {
@@ -82,6 +100,8 @@ function RequireAuth({
         to={
           user.role === "PERMANENT"
             ? "/permanent/dashboard"
+            : user.role === "PROJET"
+              ? "/projet/essais/dashboard"
             : user.role === "ADMIN"
               ? "/admin/dashboard"
               : user.role === "SUIVI"
@@ -101,6 +121,7 @@ export default function App() {
       <Route path="/login" element={<LazyPage><LoginPage /></LazyPage>} />
       <Route path="/technicentre" element={<RequireAuth roles={["AGENT", "ETABLISSEMENT"]}><LazyPage><TechnicentreHomePage /></LazyPage></RequireAuth>} />
       <Route path="/technicentre/dashboard" element={<RequireAuth roles={["AGENT", "ETABLISSEMENT"]}><LazyPage><TechnicentreHomePage /></LazyPage></RequireAuth>} />
+      <Route path="/technicentre/acheminements" element={<RequireAuth roles={["AGENT", "ETABLISSEMENT"]}><LazyPage><TechnicentreAcheminementsPage /></LazyPage></RequireAuth>} />
       <Route path="/technicentre/reception" element={<RequireAuth roles={["AGENT", "ETABLISSEMENT"]}><LazyPage><TechnicentreReceptionListPage /></LazyPage></RequireAuth>} />
       <Route path="/technicentre/reception/:id" element={<RequireAuth roles={["AGENT", "ETABLISSEMENT"]}><LazyPage><TechnicentreReceptionDetailPage /></LazyPage></RequireAuth>} />
       <Route path="/technicentre/reception/history" element={<RequireAuth roles={["AGENT", "ETABLISSEMENT"]}><LazyPage><TechnicentreReceptionHistoryPage /></LazyPage></RequireAuth>} />
@@ -115,6 +136,20 @@ export default function App() {
       <Route path="/technicentre/alerts/:id/edit" element={<RequireAuth roles={["AGENT", "ETABLISSEMENT"]}><LazyPage><NewAlertPage /></LazyPage></RequireAuth>} />
       <Route path="/technicentre/alerts/new" element={<Navigate to="/technicentre/demande/create" replace />} />
       <Route path="/technicentre/history" element={<Navigate to="/technicentre/reception/history" replace />} />
+      <Route path="/essais/dashboard" element={<RequireAuth roles={["AGENT", "ETABLISSEMENT"]}><LazyPage><OnlineTrialDashboardPage /></LazyPage></RequireAuth>} />
+      <Route path="/essais" element={<Navigate to="/essais/dashboard" replace />} />
+      <Route path="/essais/new" element={<RequireAuth roles={["AGENT", "ETABLISSEMENT"]}><LazyPage><OnlineTrialNewPage /></LazyPage></RequireAuth>} />
+      <Route path="/essais/history" element={<RequireAuth roles={["AGENT", "ETABLISSEMENT"]}><LazyPage><OnlineTrialHistoryPage /></LazyPage></RequireAuth>} />
+      <Route path="/essais/history/:id" element={<RequireAuth roles={["AGENT", "ETABLISSEMENT"]}><LazyPage><OnlineTrialDetailPage /></LazyPage></RequireAuth>} />
+      <Route path="/essais/:id" element={<RequireAuth roles={["AGENT", "ETABLISSEMENT"]}><LazyPage><OnlineTrialDetailPage /></LazyPage></RequireAuth>} />
+      <Route path="/essais/:id/edit" element={<RequireAuth roles={["AGENT", "ETABLISSEMENT"]}><LazyPage><OnlineTrialNewPage /></LazyPage></RequireAuth>} />
+      <Route path="/projet/essais/dashboard" element={<RequireAuth roles={["PROJET"]}><LazyPage><OnlineTrialDashboardPage /></LazyPage></RequireAuth>} />
+      <Route path="/projet/essais" element={<Navigate to="/projet/essais/dashboard" replace />} />
+      <Route path="/projet/essais/new" element={<RequireAuth roles={["PROJET"]}><LazyPage><OnlineTrialNewPage /></LazyPage></RequireAuth>} />
+      <Route path="/projet/essais/history" element={<RequireAuth roles={["PROJET"]}><LazyPage><OnlineTrialHistoryPage /></LazyPage></RequireAuth>} />
+      <Route path="/projet/essais/history/:id" element={<RequireAuth roles={["PROJET"]}><LazyPage><OnlineTrialDetailPage /></LazyPage></RequireAuth>} />
+      <Route path="/projet/essais/:id" element={<RequireAuth roles={["PROJET"]}><LazyPage><OnlineTrialDetailPage /></LazyPage></RequireAuth>} />
+      <Route path="/projet/essais/:id/edit" element={<RequireAuth roles={["PROJET"]}><LazyPage><OnlineTrialNewPage /></LazyPage></RequireAuth>} />
       <Route path="/agent/dashboard" element={<RequireAuth roles={["AGENT", "ETABLISSEMENT"]}><LazyPage><AgentDashboard /></LazyPage></RequireAuth>} />
       <Route path="/agent/alerts" element={<RequireAuth roles={["AGENT", "ETABLISSEMENT"]}><LazyPage><AgentDashboard /></LazyPage></RequireAuth>} />
       <Route path="/agent/alerts/:id" element={<RequireAuth roles={["AGENT", "ETABLISSEMENT"]}><LazyPage><AgentAlertDetailPage /></LazyPage></RequireAuth>} />
@@ -131,9 +166,13 @@ export default function App() {
       <Route path="/admin/users/:userId/alerts/:alertId" element={<RequireAuth roles={["ADMIN"]}><LazyPage><AdminAlertDetailPage /></LazyPage></RequireAuth>} />
       <Route path="/permanent/dashboard" element={<RequireAuth roles={["PERMANENT"]}><LazyPage><PermanentDashboard /></LazyPage></RequireAuth>} />
       <Route path="/permanent/dashboard/:id" element={<RequireAuth roles={["PERMANENT"]}><LazyPage><PermanentAlertDetailPage /></LazyPage></RequireAuth>} />
+      <Route path="/permanent/essais" element={<RequireAuth roles={["PERMANENT"]}><LazyPage><PermanentOnlineTrialDashboardPage /></LazyPage></RequireAuth>} />
+      <Route path="/permanent/essais/:id" element={<RequireAuth roles={["PERMANENT"]}><LazyPage><PermanentOnlineTrialDetailPage /></LazyPage></RequireAuth>} />
       <Route path="/permanent/map" element={<RequireAuth roles={["PERMANENT"]}><LazyPage><PermanentMapPage /></LazyPage></RequireAuth>} />
       <Route path="/tracking/requests" element={<RequireAuth roles={["SUIVI"]}><LazyPage><TrackingRequestsVisionPage /></LazyPage></RequireAuth>} />
       <Route path="/tracking/reception-quality" element={<RequireAuth roles={["SUIVI"]}><LazyPage><TrackingReceptionQualityPage /></LazyPage></RequireAuth>} />
+      <Route path="/tracking/essais" element={<RequireAuth roles={["SUIVI"]}><LazyPage><TrackingOnlineTrialsPage /></LazyPage></RequireAuth>} />
+      <Route path="/tracking/essais/performance" element={<RequireAuth roles={["SUIVI"]}><LazyPage><TrackingOnlineTrialsPerformancePage /></LazyPage></RequireAuth>} />
       <Route path="/tracking/all" element={<Navigate to="/tracking/requests" replace />} />
       <Route path="/tracking/dashboard" element={<Navigate to="/tracking/requests" replace />} />
       <Route path="/tracking/playback" element={<Navigate to="/tracking/requests" replace />} />

@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { AlertCard } from "../components/AlertCard";
@@ -110,8 +110,8 @@ export function PermanentDashboard() {
     <div className="space-y-6">
       <section className="panel p-6">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Permanent PM</p>
-          <h2 className="mt-3 text-4xl font-semibold tracking-tight text-slate-950">Liste des demandes</h2>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Permanent PPM</p>
+          <h2 className="mt-3 text-4xl font-semibold tracking-tight text-slate-950">Liste des demandes d'acheminements</h2>
         </div>
 
         <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(240px,300px)_minmax(0,1fr)]">

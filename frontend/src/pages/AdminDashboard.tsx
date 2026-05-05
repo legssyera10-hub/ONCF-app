@@ -5,7 +5,7 @@ import { useAuth } from "../hooks/useAuth";
 import type { AdminMailRoutingSettings, AdminUser, Establishment, Role } from "../types";
 import { formatDateTime } from "../utils/format";
 
-const roleOptions: Role[] = ["ADMIN", "PERMANENT", "ETABLISSEMENT", "SUIVI"];
+const roleOptions: Role[] = ["ADMIN", "PERMANENT", "ETABLISSEMENT", "PROJET", "SUIVI"];
 
 type AdminPrimaryTab = "DASHBOARD" | "ACCOUNTS";
 type AccountsSecondaryTab = "CREATE" | "LIST";
@@ -29,6 +29,7 @@ type ExistingAccountItem =
 function getRoleLabel(role: Role | "ALL") {
   if (role === "ALL") return "Tous les comptes";
   if (role === "ETABLISSEMENT") return "Technicentres";
+  if (role === "PROJET") return "Comptes projet";
   if (role === "PERMANENT") return "Permanents";
   if (role === "SUIVI") return "Visionnement demandes";
   return "Admins";
@@ -36,6 +37,7 @@ function getRoleLabel(role: Role | "ALL") {
 
 function getRoleOptionLabel(role: Role) {
   if (role === "ETABLISSEMENT") return "Technicentre";
+  if (role === "PROJET") return "Projet";
   if (role === "PERMANENT") return "Permanent";
   if (role === "SUIVI") return "Visionnement demandes";
   return "Admin";
@@ -152,13 +154,14 @@ export function AdminDashboard() {
   const dashboardStats = useMemo(() => {
     const totalAccounts = users.length;
     const establishmentAccounts = users.filter((account) => account.role === "ETABLISSEMENT").length;
+    const projetAccounts = users.filter((account) => account.role === "PROJET").length;
     const adminAccounts = users.filter((account) => account.role === "ADMIN").length;
 
     return [
       { label: "Comptes total", value: totalAccounts, helper: "Tous les profils disponibles dans la plateforme" },
       { label: "Admins", value: adminAccounts, helper: "Comptes avec droits de pilotage" },
       { label: "Technicentres", value: establishmentAccounts, helper: `${establishments.length} fiches configurées` },
-      { label: "Profils actifs", value: totalAccounts, helper: "Comptes actuellement exploitables" },
+      { label: "Comptes projet", value: projetAccounts, helper: "Profils dedies aux essais en ligne" },
     ];
   }, [users, establishments]);
 

@@ -229,7 +229,7 @@ export function AdminRequestConfigPage() {
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="panel p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h3 className="text-xl font-semibold text-slate-950">Sites - Carte Maroc PM</h3>
+            <h3 className="text-xl font-semibold text-slate-950">Sites - Carte Maroc PPM</h3>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"

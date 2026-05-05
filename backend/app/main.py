@@ -7,7 +7,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.api import admin, alerts, auth, meta
+from app.api import admin, alerts, auth, meta, online_trials
 from app.core.config import settings
 from app.db.base import Base
 from app.db.bootstrap import run_startup_migrations
@@ -38,6 +38,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(meta.router)
 app.include_router(alerts.router)
+app.include_router(online_trials.router)
 app.include_router(admin.router)
 Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")

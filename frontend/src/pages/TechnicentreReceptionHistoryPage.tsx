@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import { DossierFiltersBar } from "../components/DossierFiltersBar";
-import { PageBreadcrumbs } from "../components/PageBreadcrumbs";
 import { TechnicentreDossierRow } from "../components/TechnicentreDossierRow";
 import { useAuth } from "../hooks/useAuth";
 import { useLiveAlerts } from "../hooks/useLiveAlerts";
@@ -31,7 +30,6 @@ function isSameLocalDate(value?: string | null, targetDate?: string) {
 
 export function TechnicentreReceptionHistoryPage() {
   const { token } = useAuth();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
@@ -62,12 +60,7 @@ export function TechnicentreReceptionHistoryPage() {
     () =>
       notifications
         .filter((item) => (selectedStatus !== "ALL" ? item.alert.status === selectedStatus : true))
-        .filter((item) =>
-          [
-            "RECEPTION_PARTIELLE",
-            "RECEPTION_COMPLETE",
-          ].includes(item.alert.status)
-        )
+        .filter((item) => ["RECEPTION_PARTIELLE", "RECEPTION_COMPLETE"].includes(item.alert.status))
         .filter((item) =>
           selectedDate
             ? isSameLocalDate(item.alert.establishment_confirmation?.confirmed_at ?? item.sent_at, selectedDate)
@@ -100,21 +93,9 @@ export function TechnicentreReceptionHistoryPage() {
   return (
     <div className="space-y-6">
       <section className="panel flex flex-col gap-5 p-6">
-        <div className="flex flex-col gap-5">
-          <div>
-            <PageBreadcrumbs
-              items={[
-                { label: "Technicentre", to: "/technicentre" },
-                { label: "Réception", to: "/technicentre/reception" },
-                { label: "Historique" },
-              ]}
-            />
-            <button type="button" onClick={() => navigate("/technicentre/reception")} className="btn-secondary">
-              Retour
-            </button>
-            <p className="mt-4 text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Historique réception</p>
-            <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Dossiers de réception</h2>
-          </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Historique reception</p>
+          <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Dossiers de reception</h2>
         </div>
 
         <DossierFiltersBar
@@ -171,7 +152,7 @@ export function TechnicentreReceptionHistoryPage() {
               return next;
             });
           }}
-          metrics={[{ label: "Résultats", value: receptions.length }]}
+          metrics={[{ label: "Resultats", value: receptions.length }]}
         />
       </section>
 
@@ -187,7 +168,7 @@ export function TechnicentreReceptionHistoryPage() {
                 notification.alert.created_by.full_name
               }
               eventCount={notification.alert.history.length}
-              actionLabel="Ouvrir la réception"
+              actionLabel="Ouvrir la reception"
               latestNote={notification.alert.history.slice().reverse().find((item) => item.note?.trim())?.note}
               to={`/technicentre/reception/history/${notification.alert.id}`}
               state={{
@@ -206,7 +187,7 @@ export function TechnicentreReceptionHistoryPage() {
         </div>
       ) : (
         <div className="panel p-8 text-sm text-slate-500">
-          {selectedDate ? "Aucune réception trouvée pour la date sélectionnée." : "Aucune réception confirmée à afficher."}
+          {selectedDate ? "Aucune reception trouvee pour la date selectionnee." : "Aucune reception confirmee a afficher."}
         </div>
       )}
     </div>

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import json
 import unicodedata
 from typing import Optional
 
@@ -20,6 +21,7 @@ from app.models.enums import (
     Severity,
     UserRole,
 )
+from app.models.online_trial import OnlineTrialDecision, OnlineTrialRequest, OnlineTrialStatusHistory
 from app.models.station import Station
 from app.models.user import User
 from app.services.alerts import add_history
@@ -155,8 +157,9 @@ def _ensure_user(db, username: str, password: str, role: UserRole, full_name: st
 def _ensure_core_users(db, establishments_by_code: dict[str, Establishment]) -> dict[str, User]:
     users: dict[str, User] = {}
     users["admin"] = _ensure_user(db, "admin", "pass123", UserRole.ADMIN, "Administrateur ONCF")
-    users["permanent"] = _ensure_user(db, "permanent", "pass123", UserRole.PERMANENT, "Permanent PM")
+    users["permanent"] = _ensure_user(db, "permanent", "pass123", UserRole.PERMANENT, "Permanent PPM")
     users["suivi"] = _ensure_user(db, "suivi", "pass123", UserRole.SUIVI, "Vision Suivi Acheminement")
+    users["projet"] = _ensure_user(db, "projet", "pass123", UserRole.PROJET, "Compte Projet Essais")
 
     for code, name, _city in ESTABLISHMENT_DEFINITIONS:
         username = _slug(code)
@@ -263,6 +266,94 @@ def _seed_demo_alerts(db, users: dict[str, User], stations_by_code: dict[str, St
     )
 
 
+def _seed_demo_online_trials(db, users: dict[str, User], stations_by_code: dict[str, Station]) -> None:
+    if db.execute(select(OnlineTrialRequest).limit(1)).scalar_one_or_none():
+        return
+
+    now = datetime.now(timezone.utc)
+    creator = users.get("tmic") or users["projet"]
+    permanent = users["permanent"]
+
+    trial = OnlineTrialRequest(
+        created_by_user_id=creator.id,
+        dossier_number=1,
+        dossier_parent_id=None,
+        dossier_iteration=0,
+        departure_station_id=stations_by_code["CASP"].id,
+        arrival_station_id=stations_by_code["RABA"].id,
+        station_id=stations_by_code["CASV"].id,
+        material_type="MM + MM",
+        material_ref="E1400 + E1450",
+        material_concerned="Rame 1 + Rame 2",
+        departure_date=now + timedelta(days=1),
+        request_date=now + timedelta(days=1),
+        speed_kmh=120,
+        parcours_aller=True,
+        parcours_retour=True,
+        transport_mode="US",
+        transport_type="HLP",
+        problem_description="Essai de performance en ligne apres maintenance planifiee.",
+        maintenance_state=MaintenanceState.PV,
+        severity=Severity.NIVEAU_2,
+        transport_conditions_initial="Parcours aller-retour avec suivi de stabilite.",
+        status=AlertStatus.TRAITEE_PAR_PM,
+        pm_reference_at=now,
+        trial_material_progress=json.dumps(
+            {
+                "0": {
+                    "performed": True,
+                    "departure_date": (now + timedelta(hours=2)).isoformat(),
+                    "return_date": (now + timedelta(hours=6)).isoformat(),
+                    "delay_minutes": 15,
+                    "remarks": "Essai realise avec leger retard",
+                    "updated_at": now.isoformat(),
+                },
+                "1": {
+                    "performed": False,
+                    "departure_date": None,
+                    "return_date": None,
+                    "delay_minutes": None,
+                    "remarks": "Planifie",
+                    "updated_at": now.isoformat(),
+                },
+            }
+        ),
+    )
+    db.add(trial)
+    db.flush()
+
+    db.add(
+        OnlineTrialStatusHistory(
+            trial_id=trial.id,
+            status=AlertStatus.EN_COURS_DE_TRAITEMENT,
+            changed_by_user_id=creator.id,
+            note="Demande d'essai creee",
+        )
+    )
+    db.add(
+        OnlineTrialStatusHistory(
+            trial_id=trial.id,
+            status=AlertStatus.TRAITEE_PAR_PM,
+            changed_by_user_id=permanent.id,
+            note="Demande d'essai acceptee par le permanent",
+        )
+    )
+    db.add(
+        OnlineTrialDecision(
+            trial_id=trial.id,
+            permanent_user_id=permanent.id,
+            decision=DecisionKind.CONFIRMER,
+            comment="Essai valide avec suivi par materiel",
+            material_decisions=json.dumps(
+                {
+                    "0": {"ppm_status": "ACCEPTEE", "ppm_reason": None, "updated_at": now.isoformat()},
+                    "1": {"ppm_status": "ACCEPTEE", "ppm_reason": None, "updated_at": now.isoformat()},
+                }
+            ),
+        )
+    )
+
+
 def seed_demo_data() -> None:
     db = SessionLocal()
     try:
@@ -270,6 +361,7 @@ def seed_demo_data() -> None:
         stations_by_code = _ensure_stations(db)
         users = _ensure_core_users(db, establishments_by_code)
         _seed_demo_alerts(db, users, stations_by_code, establishments_by_code)
+        _seed_demo_online_trials(db, users, stations_by_code)
         db.commit()
     finally:
         db.close()

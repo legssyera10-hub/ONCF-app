@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import { DossierFiltersBar } from "../components/DossierFiltersBar";
 import { TechnicentreDossierRow } from "../components/TechnicentreDossierRow";
@@ -9,7 +9,6 @@ import { getApiTimestamp } from "../utils/format";
 
 export function TechnicentreModificationRequestsPage() {
   const { token, user } = useAuth();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
@@ -82,24 +81,21 @@ export function TechnicentreModificationRequestsPage() {
     <div className="space-y-6">
       <section className="panel flex flex-col gap-5 p-6">
         <div>
-          <button type="button" onClick={() => navigate("/technicentre")} className="btn-secondary">
-            Retour
-          </button>
-          <p className="mt-4 text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Demandes à modifier</p>
-          <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Demandes nécessitant une modification</h2>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Demandes a modifier</p>
+          <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Demandes necessitant une modification</h2>
           <p className="mt-2 text-sm text-slate-500">
-            Cette liste affiche uniquement les demandes retournées par le permanent pour correction.
+            Cette liste affiche uniquement les demandes retournees par le permanent pour correction.
           </p>
           <div className="mt-5 max-w-xs">
             <div className={modificationAlerts.length > 0 ? "metric-card permanent-alert-card" : "metric-card"}>
               <p className={modificationAlerts.length > 0 ? "text-xs uppercase tracking-[0.22em] text-rose-700" : "text-xs uppercase tracking-[0.22em] text-slate-400"}>
-                Demandes à modifier
+                Demandes a modifier
               </p>
               <p className={modificationAlerts.length > 0 ? "mt-3 text-3xl font-semibold text-rose-700" : "mt-3 text-3xl font-semibold text-slate-900"}>
                 {modificationAlerts.length}
               </p>
               <p className={modificationAlerts.length > 0 ? "mt-2 text-sm text-rose-600" : "mt-2 text-sm text-slate-500"}>
-                Demandes retournées par le permanent
+                Demandes retournees par le permanent
               </p>
             </div>
           </div>
@@ -120,7 +116,7 @@ export function TechnicentreModificationRequestsPage() {
             });
           }}
           searchPlaceholder="Dossier, demandeur ou destinataire"
-          metrics={[{ label: "Dossiers trouvés", value: modificationAlerts.length }]}
+          metrics={[{ label: "Dossiers trouves", value: modificationAlerts.length }]}
         />
       </section>
 
@@ -142,7 +138,7 @@ export function TechnicentreModificationRequestsPage() {
           ))}
         </div>
       ) : (
-        <div className="panel p-8 text-sm text-slate-500">Aucune demande à modifier.</div>
+        <div className="panel p-8 text-sm text-slate-500">Aucune demande a modifier.</div>
       )}
     </div>
   );

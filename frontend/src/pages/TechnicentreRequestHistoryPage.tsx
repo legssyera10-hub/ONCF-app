@@ -3,7 +3,6 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import { DossierFiltersBar } from "../components/DossierFiltersBar";
 import { TechnicentreDossierRow } from "../components/TechnicentreDossierRow";
-import { PageBreadcrumbs } from "../components/PageBreadcrumbs";
 import { useAuth } from "../hooks/useAuth";
 import { useLiveAlerts } from "../hooks/useLiveAlerts";
 import { preloadRoute } from "../routes/lazyRoutes";
@@ -94,32 +93,17 @@ export function TechnicentreRequestHistoryPage() {
       <section className="panel flex flex-col gap-5 p-6">
         <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div>
-            <PageBreadcrumbs
-              items={[
-                { label: "Technicentre", to: "/technicentre" },
-                { label: "Demande", to: "/technicentre/demande" },
-                { label: "Historique" },
-              ]}
-            />
-            <p className="mt-4 text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Historique demande</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Historique demande</p>
             <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Dossiers des demandes</h2>
           </div>
           <div className="flex flex-wrap gap-3">
-            <Link
-              to="/technicentre/demande"
-              onMouseEnter={() => preloadRoute("/technicentre/demande")}
-              onFocus={() => preloadRoute("/technicentre/demande")}
-              className="btn-secondary"
-            >
-              Retour
-            </Link>
             <Link
               to="/technicentre/demande/create"
               onMouseEnter={() => preloadRoute("/technicentre/demande/create")}
               onFocus={() => preloadRoute("/technicentre/demande/create")}
               className="btn-primary"
             >
-              Créer une demande
+              Creer une demande
             </Link>
           </div>
         </div>
@@ -178,7 +162,7 @@ export function TechnicentreRequestHistoryPage() {
               return next;
             });
           }}
-          metrics={[{ label: "Résultats", value: filteredAlerts.length }]}
+          metrics={[{ label: "Resultats", value: filteredAlerts.length }]}
         />
       </section>
 
@@ -209,7 +193,7 @@ export function TechnicentreRequestHistoryPage() {
         </div>
       ) : (
         <div className="panel p-8 text-sm text-slate-500">
-          {selectedDate ? "Aucune demande trouvée pour la date sélectionnée." : "Aucune demande trouvée dans l'historique."}
+          {selectedDate ? "Aucune demande trouvee pour la date selectionnee." : "Aucune demande trouvee dans l'historique."}
         </div>
       )}
     </div>

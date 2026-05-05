@@ -129,7 +129,7 @@ export function ConfirmationForm({
         event.preventDefault();
 
         if (acceptedRows.length === 0) {
-          setError("Aucun materiel accepte par le PM n'est disponible pour la reception.");
+          setError("Aucun materiel accepte par le PPM n'est disponible pour la reception.");
           return;
         }
 
@@ -190,8 +190,8 @@ export function ConfirmationForm({
                 <th className="px-3 py-3">Type</th>
                 <th className="px-3 py-3">Serie</th>
                 <th className="px-3 py-3">Materiel concerne</th>
-                <th className="px-3 py-3">Etat demande (PM)</th>
-                <th className="px-3 py-3">Motif PM</th>
+                <th className="px-3 py-3">Etat demande (PPM)</th>
+                <th className="px-3 py-3">Motif PPM</th>
                 <th className="px-3 py-3">Date reception</th>
                 <th className="px-3 py-3">Confirmation reception</th>
                 <th className="px-3 py-3">Observation</th>

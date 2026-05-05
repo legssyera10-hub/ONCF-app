@@ -50,10 +50,12 @@ export function StatusBadge({
   status,
   subStatus,
   materialConfirmations,
+  labelOverride,
 }: {
   status: AlertStatus;
   subStatus?: string | null;
   materialConfirmations?: string | null;
+  labelOverride?: string;
 }) {
   const resolvedSubStatus =
     subStatus ??
@@ -62,7 +64,7 @@ export function StatusBadge({
   return (
     <span className="inline-flex flex-col items-center leading-tight">
       <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusMap[status]}`}>
-        {getStatusLabel(status)}
+        {labelOverride ?? getStatusLabel(status)}
       </span>
       {resolvedSubStatus ? <span className="mt-1 text-[10px] font-semibold text-slate-500">{resolvedSubStatus}</span> : null}
     </span>

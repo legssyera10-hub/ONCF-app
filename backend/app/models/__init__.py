@@ -1,6 +1,7 @@
 from app.models.app_setting import AppSetting
 from app.models.alert import Alert, AlertAttachment, AlertRevision, AlertStatusHistory, EstablishmentConfirmation, MailEvent, Notification, PermanentDecision
 from app.models.establishment import Establishment
+from app.models.online_trial import OnlineTrialAttachment, OnlineTrialDecision, OnlineTrialRequest, OnlineTrialStatusHistory
 from app.models.station import Station
 from app.models.user import User
 
@@ -14,6 +15,10 @@ __all__ = [
     "EstablishmentConfirmation",
     "MailEvent",
     "Notification",
+    "OnlineTrialAttachment",
+    "OnlineTrialDecision",
+    "OnlineTrialRequest",
+    "OnlineTrialStatusHistory",
     "PermanentDecision",
     "Station",
     "User",

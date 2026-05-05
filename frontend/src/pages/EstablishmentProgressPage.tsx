@@ -128,7 +128,7 @@ export function EstablishmentProgressPage() {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-xs uppercase tracking-wide text-slate-500">Determinate Progress Bar</p>
-                    <p className="mt-1 text-sm text-slate-600">Progression estimée automatiquement depuis le traitement PM.</p>
+                    <p className="mt-1 text-sm text-slate-600">Progression estimée automatiquement depuis le traitement PPM.</p>
                   </div>
                   <p className="text-sm font-semibold text-slate-700">
                     {getTransportProgress(current) !== null ? `${getTransportProgress(current)}%` : "-"}

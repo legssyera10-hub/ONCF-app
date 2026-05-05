@@ -20,6 +20,9 @@ export function LoginPage() {
   if (user?.role === "ADMIN") {
     return <Navigate to="/admin/dashboard" replace />;
   }
+  if (user?.role === "PROJET") {
+    return <Navigate to="/projet/essais/dashboard" replace />;
+  }
   if (user?.role === "SUIVI") {
     return <Navigate to="/tracking/requests" replace />;
   }

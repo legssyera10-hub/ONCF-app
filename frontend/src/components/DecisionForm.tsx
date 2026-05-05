@@ -281,7 +281,7 @@ export function DecisionForm({
                   <th className="px-3 py-3">Type</th>
                   <th className="px-3 py-3">Serie</th>
                   <th className="px-3 py-3">Materiel concerne</th>
-                  <th className="px-3 py-3">Decision PM</th>
+                  <th className="px-3 py-3">Decision PPM</th>
                   <th className="px-3 py-3">Motif PPM (modification / annulation)</th>
                 </tr>
               </thead>
@@ -338,13 +338,13 @@ export function DecisionForm({
                           <p className="mt-1 text-xs text-slate-600">Reception deja validee: materiel cloture.</p>
                         ) : null}
                         {persistedStatus === "MODIFIEE" ? (
-                          <p className="mt-1 text-xs text-orange-700">Demande modifiee par PM sur ce dossier.</p>
+                          <p className="mt-1 text-xs text-orange-700">Demande modifiee par PPM sur ce dossier.</p>
                         ) : null}
                       </td>
                       <td className="px-3 py-3">
                         <input
                           className="input h-10 w-full min-w-[220px]"
-                          placeholder="Motif PM pour ce materiel"
+                          placeholder="Motif PPM pour ce materiel"
                           value={materialReasons[row.index] ?? ""}
                           onChange={(event) =>
                             setMaterialReasons((prev) => ({
@@ -447,7 +447,7 @@ export function DecisionForm({
           ? "Renvoyer au demandeur"
           : payload.decision === "ANNULER"
             ? "Annuler la demande"
-            : "Valider le traitement PM"}
+            : "Valider le traitement PPM"}
       </button>
     </form>
   );

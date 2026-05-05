@@ -52,6 +52,11 @@ export const loadTechnicentreModificationRequestsPage = () =>
 export const loadTechnicentreHomePage = () =>
   import("../pages/TechnicentreHomePage").then((module) => ({ default: module.TechnicentreHomePage }));
 
+export const loadTechnicentreAcheminementsPage = () =>
+  import("../pages/TechnicentreAcheminementsPage").then((module) => ({
+    default: module.TechnicentreAcheminementsPage,
+  }));
+
 export const loadTechnicentreReceptionDetailPage = () =>
   import("../pages/TechnicentreReceptionDetailPage").then((module) => ({ default: module.TechnicentreReceptionDetailPage }));
 
@@ -70,6 +75,36 @@ export const loadTrackingRequestsVisionPage = () =>
 export const loadTrackingReceptionQualityPage = () =>
   import("../pages/TrackingReceptionQualityPage").then((module) => ({ default: module.TrackingReceptionQualityPage }));
 
+export const loadOnlineTrialDashboardPage = () =>
+  import("../pages/OnlineTrialDashboardPage").then((module) => ({ default: module.OnlineTrialDashboardPage }));
+
+export const loadOnlineTrialHistoryPage = () =>
+  import("../pages/OnlineTrialHistoryPage").then((module) => ({ default: module.OnlineTrialHistoryPage }));
+
+export const loadOnlineTrialNewPage = () =>
+  import("../pages/OnlineTrialNewPage").then((module) => ({ default: module.OnlineTrialNewPage }));
+
+export const loadOnlineTrialDetailPage = () =>
+  import("../pages/OnlineTrialDetailPage").then((module) => ({ default: module.OnlineTrialDetailPage }));
+
+export const loadPermanentOnlineTrialDashboardPage = () =>
+  import("../pages/PermanentOnlineTrialDashboardPage").then((module) => ({
+    default: module.PermanentOnlineTrialDashboardPage,
+  }));
+
+export const loadPermanentOnlineTrialDetailPage = () =>
+  import("../pages/PermanentOnlineTrialDetailPage").then((module) => ({
+    default: module.PermanentOnlineTrialDetailPage,
+  }));
+
+export const loadTrackingOnlineTrialsPage = () =>
+  import("../pages/TrackingOnlineTrialsPage").then((module) => ({ default: module.TrackingOnlineTrialsPage }));
+
+export const loadTrackingOnlineTrialsPerformancePage = () =>
+  import("../pages/TrackingOnlineTrialsPerformancePage").then((module) => ({
+    default: module.TrackingOnlineTrialsPerformancePage,
+  }));
+
 const routePreloaders: Array<[prefix: string, load: () => Promise<unknown>]> = [
   ["/login", loadLoginPage],
   ["/technicentre/reception/history/", loadTechnicentreReceptionDetailPage],
@@ -81,6 +116,7 @@ const routePreloaders: Array<[prefix: string, load: () => Promise<unknown>]> = [
   ["/technicentre/demande/history", loadTechnicentreRequestHistoryPage],
   ["/technicentre/demande/create", loadNewAlertPage],
   ["/technicentre/demande", loadTechnicentreDemandPage],
+  ["/technicentre/acheminements", loadTechnicentreAcheminementsPage],
   ["/technicentre/alerts/new", loadNewAlertPage],
   ["/technicentre/alerts/", loadAgentAlertDetailPage],
   ["/technicentre/alerts", loadTechnicentreRequestHistoryPage],
@@ -99,8 +135,22 @@ const routePreloaders: Array<[prefix: string, load: () => Promise<unknown>]> = [
   ["/admin/accounts", loadAdminDashboard],
   ["/admin/dashboard", loadAdminDashboard],
   ["/permanent/dashboard/", loadPermanentAlertDetailPage],
+  ["/permanent/essais/", loadPermanentOnlineTrialDetailPage],
+  ["/permanent/essais", loadPermanentOnlineTrialDashboardPage],
   ["/permanent/map", loadPermanentMapPage],
   ["/permanent/dashboard", loadPermanentDashboard],
+  ["/projet/essais/history/", loadOnlineTrialDetailPage],
+  ["/projet/essais/history", loadOnlineTrialHistoryPage],
+  ["/projet/essais/new", loadOnlineTrialNewPage],
+  ["/projet/essais/", loadOnlineTrialDetailPage],
+  ["/projet/essais", loadOnlineTrialDashboardPage],
+  ["/essais/history/", loadOnlineTrialDetailPage],
+  ["/essais/history", loadOnlineTrialHistoryPage],
+  ["/essais/new", loadOnlineTrialNewPage],
+  ["/essais/", loadOnlineTrialDetailPage],
+  ["/essais", loadOnlineTrialDashboardPage],
+  ["/tracking/essais/performance", loadTrackingOnlineTrialsPerformancePage],
+  ["/tracking/essais", loadTrackingOnlineTrialsPage],
   ["/tracking/reception-quality", loadTrackingReceptionQualityPage],
   ["/tracking/requests", loadTrackingRequestsVisionPage],
 ];

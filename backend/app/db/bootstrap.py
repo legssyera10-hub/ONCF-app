@@ -150,6 +150,69 @@ def run_startup_migrations() -> None:
         if "material_decisions" not in permanent_decision_columns:
             connection.execute(text("ALTER TABLE permanent_decisions ADD COLUMN material_decisions TEXT"))
 
+        online_trial_table_exists = connection.execute(
+            text(
+                """
+                SELECT name
+                FROM sqlite_master
+                WHERE type = 'table' AND name = 'online_trial_requests'
+                """
+            )
+        ).fetchone()
+        if online_trial_table_exists:
+            online_trial_columns = {
+                row[1]
+                for row in connection.execute(text("PRAGMA table_info(online_trial_requests)")).fetchall()
+            }
+            if "dossier_number" not in online_trial_columns:
+                connection.execute(text("ALTER TABLE online_trial_requests ADD COLUMN dossier_number INTEGER"))
+            if "dossier_parent_id" not in online_trial_columns:
+                connection.execute(text("ALTER TABLE online_trial_requests ADD COLUMN dossier_parent_id INTEGER"))
+            if "dossier_iteration" not in online_trial_columns:
+                connection.execute(text("ALTER TABLE online_trial_requests ADD COLUMN dossier_iteration INTEGER"))
+            if "parcours_aller" not in online_trial_columns:
+                connection.execute(text("ALTER TABLE online_trial_requests ADD COLUMN parcours_aller INTEGER"))
+            if "parcours_retour" not in online_trial_columns:
+                connection.execute(text("ALTER TABLE online_trial_requests ADD COLUMN parcours_retour INTEGER"))
+
+            connection.execute(
+                text("UPDATE online_trial_requests SET dossier_number = id WHERE dossier_number IS NULL")
+            )
+            connection.execute(
+                text("UPDATE online_trial_requests SET dossier_iteration = 0 WHERE dossier_iteration IS NULL")
+            )
+            connection.execute(
+                text("UPDATE online_trial_requests SET parcours_aller = 1 WHERE parcours_aller IS NULL")
+            )
+            connection.execute(
+                text("UPDATE online_trial_requests SET parcours_retour = 1 WHERE parcours_retour IS NULL")
+            )
+            connection.execute(
+                text(
+                    """
+                    UPDATE online_trial_requests
+                    SET dossier_number = (
+                        SELECT parent.dossier_number
+                        FROM online_trial_requests AS parent
+                        WHERE parent.id = online_trial_requests.dossier_parent_id
+                    )
+                    WHERE dossier_parent_id IS NOT NULL
+                      AND (dossier_number IS NULL OR dossier_number = id)
+                    """
+                )
+            )
+
+            connection.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_online_trial_requests_dossier_number ON online_trial_requests (dossier_number)"
+                )
+            )
+            connection.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_online_trial_requests_dossier_parent_id ON online_trial_requests (dossier_parent_id)"
+                )
+            )
+
         connection.execute(
             text(
                 """

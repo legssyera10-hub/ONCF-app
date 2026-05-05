@@ -3,7 +3,6 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import { DossierFiltersBar } from "../components/DossierFiltersBar";
 import { TechnicentreDossierRow } from "../components/TechnicentreDossierRow";
-import { PageBreadcrumbs } from "../components/PageBreadcrumbs";
 import { useAuth } from "../hooks/useAuth";
 import { useLiveAlerts } from "../hooks/useLiveAlerts";
 import { preloadRoute } from "../routes/lazyRoutes";
@@ -90,8 +89,7 @@ export function TechnicentreDemandPage() {
     <div className="space-y-6">
       <section className="panel flex flex-col gap-5 p-6 md:flex-row md:items-end md:justify-between">
         <div>
-          <PageBreadcrumbs items={[{ label: "Technicentre", to: "/technicentre" }, { label: "Demande" }]} />
-          <p className="mt-4 text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Demande</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Demande</p>
           <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Dossiers de demande</h2>
           <div className="mt-5 max-w-xs">
             <div className={demandes.length > 0 ? "metric-card permanent-alert-card" : "metric-card"}>

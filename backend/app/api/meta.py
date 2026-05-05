@@ -43,3 +43,14 @@ def read_alert_form_config(_: User = Depends(get_current_user), db: Session = De
     return AlertFormConfigRead(
         fields={name: AlertFormFieldConfigRead(**value) for name, value in config.items()}
     )
+
+
+@router.get("/online-trial-form-config", response_model=AlertFormConfigRead)
+def read_online_trial_form_config(
+    _: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AlertFormConfigRead:
+    config = get_alert_form_config(db)
+    return AlertFormConfigRead(
+        fields={name: AlertFormFieldConfigRead(**value) for name, value in config.items()}
+    )

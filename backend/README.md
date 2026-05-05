@@ -1,6 +1,6 @@
 ﻿# Backend ONCF
 
-API FastAPI pour la gestion des demandes d'acheminement et du workflow PM/reception.
+API FastAPI pour la gestion des demandes d'acheminement et des demandes d'essais en ligne.
 
 ## Stack
 
@@ -36,5 +36,17 @@ Voir `backend/.env.example`.
 
 ## Notes roles
 
-La documentation metier utilise 4 roles: `Technicentre`, `Permanent PM`, `Admin`, `Suivi`.
-Le code conserve des constantes de roles historiques pour compatibilite.
+La plateforme prend en charge les roles metier:
+`Technicentre`, `Projet`, `Permanent PM`, `Admin`, `Suivi`.
+
+Le code conserve des constantes de compatibilite historiques.
+
+## Endpoints module essais en ligne
+
+- `POST /online-trials`
+- `PUT /online-trials/{id}`
+- `GET /online-trials`
+- `GET /online-trials/{id}`
+- `POST /online-trials/{id}/decision`
+- `POST /online-trials/{id}/progress`
+- `GET /online-trial-form-config`

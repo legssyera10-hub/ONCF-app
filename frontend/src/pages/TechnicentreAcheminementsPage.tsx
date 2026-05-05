@@ -6,32 +6,31 @@ import { preloadRoute } from "../routes/lazyRoutes";
 
 const sections = [
   {
-    key: "acheminements",
-    title: "Acheminements",
+    key: "reception",
+    title: "Reception",
     description:
-      "Acceder au module des demandes d'acheminement, incluant la partie Demande et la partie Reception.",
-    to: "/technicentre/acheminements",
-    action: "Entrer dans acheminements",
+      "Consulter les dossiers de reception destines a ce technicentre, ouvrir chaque dossier et confirmer la reception.",
+    to: "/technicentre/reception",
+    action: "Ouvrir la reception",
   },
   {
-    key: "essais",
-    title: "Essais en ligne",
-    description: "Creer et suivre les demandes d'essais en ligne pour evaluer performance, qualite et conformite.",
-    to: "/essais/dashboard",
-    action: "Entrer dans essais en ligne",
+    key: "demande",
+    title: "Demande",
+    description: "Creer une demande d'acheminement et consulter l'historique complet de vos dossiers.",
+    to: "/technicentre/demande",
+    action: "Ouvrir la demande",
   },
 ] as const;
 
-export function TechnicentreHomePage() {
+export function TechnicentreAcheminementsPage() {
   const { token } = useAuth();
   const [receptionCount, setReceptionCount] = useState(0);
   const [modificationCount, setModificationCount] = useState(0);
-  const [trialModificationCount, setTrialModificationCount] = useState(0);
 
   useEffect(() => {
     if (!token) return;
-    Promise.all([api.notifications(token), api.alerts(token, "?mine=true"), api.onlineTrials(token, "?mine=true")])
-      .then(([notifications, alerts, trials]) => {
+    Promise.all([api.notifications(token), api.alerts(token, "?mine=true")])
+      .then(([notifications, alerts]) => {
         const pendingReceptions = notifications.filter((item) =>
           ["TRAITEE_PAR_PM", "RECEPTION_PARTIELLE"].includes(item.alert.status)
         ).length;
@@ -57,17 +56,16 @@ export function TechnicentreHomePage() {
         }).length;
 
         setModificationCount(actionableModificationCount);
-        setTrialModificationCount(trials.filter((item) => item.status === "A_MODIFIER").length);
       })
       .catch(() => undefined);
   }, [token]);
 
   const sectionCount = useMemo(
     () => ({
-      acheminements: receptionCount + modificationCount,
-      essais: trialModificationCount,
+      reception: receptionCount,
+      demande: modificationCount,
     }),
-    [receptionCount, modificationCount, trialModificationCount]
+    [receptionCount, modificationCount]
   );
 
   return (
@@ -75,26 +73,29 @@ export function TechnicentreHomePage() {
       <div className="grid w-full gap-6 lg:grid-cols-2">
         {sections.map((section) => {
           const activeCount = sectionCount[section.key];
+          const targetPath =
+            section.key === "demande" && activeCount > 0 ? "/technicentre/demande/modifications" : section.to;
+
           const badge =
             activeCount > 0
-              ? section.key === "acheminements"
-                ? `${activeCount} action${activeCount > 1 ? "s" : ""} sur acheminements`
-                : `${activeCount} demande${activeCount > 1 ? "s" : ""} d'essai a revoir`
-              : section.key === "acheminements"
-                ? "Aucune action en attente"
+              ? section.key === "reception"
+                ? `${activeCount} reception${activeCount > 1 ? "s" : ""} programmee${activeCount > 1 ? "s" : ""}`
+                : `${activeCount} signalement${activeCount > 1 ? "s" : ""} de modification`
+              : section.key === "reception"
+                ? "Aucune reception"
                 : "Aucun signalement";
 
           return (
             <NavLink
               key={section.to}
-              to={section.to}
-              onMouseEnter={() => preloadRoute(section.to)}
-              onFocus={() => preloadRoute(section.to)}
+              to={targetPath}
+              onMouseEnter={() => preloadRoute(targetPath)}
+              onFocus={() => preloadRoute(targetPath)}
               className="group panel flex min-h-[260px] flex-col justify-between overflow-hidden p-8 transition duration-200 hover:-translate-y-1 hover:shadow-[0_28px_70px_-34px_rgba(15,23,42,0.38)]"
             >
               <div>
                 <div className="inline-flex rounded-full border border-brand-100 bg-brand-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-brand-700">
-                  Module
+                  Espace {section.title}
                 </div>
                 <h2 className="mt-6 text-4xl font-semibold tracking-tight text-slate-950">{section.title}</h2>
                 <p className="mt-4 max-w-xl text-sm leading-7 text-slate-600">{section.description}</p>

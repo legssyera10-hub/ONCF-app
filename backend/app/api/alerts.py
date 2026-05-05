@@ -590,6 +590,9 @@ def list_alerts(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[Alert]:
+    if current_user.role == UserRole.PROJET:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acces refuse a ce module")
+
     stmt = _alert_query().order_by(Alert.created_at.desc())
 
     if current_user.role in {UserRole.AGENT, UserRole.ETABLISSEMENT} and mine:
@@ -724,7 +727,7 @@ async def create_decision(
             if item.index in reason_updates_by_index:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Chaque materiel ne peut avoir qu'un seul motif PM",
+                    detail="Chaque materiel ne peut avoir qu'un seul motif PPM",
                 )
             if item.index < 0 or item.index >= material_count:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Selection de materiels invalide")

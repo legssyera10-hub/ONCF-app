@@ -1,7 +1,8 @@
 import { useEffect, type ReactNode } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { preloadRoute } from "../routes/lazyRoutes";
+import { PageBreadcrumbs } from "../components/PageBreadcrumbs";
 
 type RoleBackgroundConfig = {
   image: string;
@@ -11,6 +12,7 @@ type RoleBackgroundConfig = {
 type NavigationItem = {
   to: string;
   label: string;
+  icon?: "home";
 };
 
 const defaultDashboardHero: RoleBackgroundConfig = {
@@ -31,6 +33,10 @@ const roleBackgrounds: Partial<Record<string, RoleBackgroundConfig>> = {
     image: "/dashboard-establishment.jpg",
     position: "center 28%",
   },
+  PROJET: {
+    image: "/dashboard-establishment.jpg",
+    position: "center 30%",
+  },
   ADMIN: {
     image: "/dashboard-admin.jpg",
     position: "center 22%",
@@ -41,23 +47,28 @@ const roleBackgrounds: Partial<Record<string, RoleBackgroundConfig>> = {
   },
 };
 
-function getNavigation(role?: string): NavigationItem[] {
+function getNavigation(role?: string, pathname?: string): NavigationItem[] {
   switch (role) {
     case "AGENT":
     case "ETABLISSEMENT":
+      return [{ to: "/technicentre", label: "Accueil", icon: "home" }];
+    case "PROJET":
       return [
-        { to: "/technicentre/reception", label: "Réception" },
-        { to: "/technicentre/demande", label: "Demande" },
+        { to: "/projet/essais/dashboard", label: "Dashboard essais" },
+        { to: "/projet/essais/history", label: "Historique essais" },
       ];
     case "PERMANENT":
       return [
         { to: "/permanent/dashboard", label: "Dashboard" },
         { to: "/permanent/map", label: "Carte Maroc" },
+        { to: "/permanent/essais", label: "Essais en ligne" },
       ];
     case "SUIVI":
       return [
         { to: "/tracking/requests", label: "Dashboard" },
         { to: "/tracking/reception-quality", label: "Qualite reception" },
+        { to: "/tracking/essais", label: "Suivi essais" },
+        { to: "/tracking/essais/performance", label: "Performance essais" },
       ];
     case "ADMIN":
       return [
@@ -70,12 +81,87 @@ function getNavigation(role?: string): NavigationItem[] {
   }
 }
 
+function getTechnicentreBreadcrumbs(pathname: string) {
+  const home = { label: "Accueil", to: "/technicentre" };
+
+  if (pathname === "/technicentre" || pathname === "/technicentre/dashboard" || pathname === "/establishment/dashboard") {
+    return [{ label: "Accueil" }];
+  }
+
+  if (pathname === "/technicentre/acheminements") {
+    return [home, { label: "Acheminements" }];
+  }
+
+  if (pathname.startsWith("/technicentre/reception")) {
+    const base = [home, { label: "Acheminements", to: "/technicentre/acheminements" }];
+    if (pathname.includes("/history")) {
+      return [...base, { label: "Historique reception" }];
+    }
+    if (/\/technicentre\/reception\/\d+/.test(pathname)) {
+      return [...base, { label: "Dossier reception" }];
+    }
+    return [...base, { label: "Reception" }];
+  }
+
+  if (pathname.startsWith("/technicentre/demande")) {
+    const base = [home, { label: "Acheminements", to: "/technicentre/acheminements" }];
+    if (pathname.endsWith("/create")) {
+      return [...base, { label: "Nouvelle demande" }];
+    }
+    if (pathname.endsWith("/modifications")) {
+      return [...base, { label: "Demandes a modifier" }];
+    }
+    if (pathname.includes("/history/")) {
+      return [...base, { label: "Detail demande" }];
+    }
+    if (pathname.endsWith("/history")) {
+      return [...base, { label: "Historique demandes" }];
+    }
+    return [...base, { label: "Demande" }];
+  }
+
+  if (pathname.startsWith("/essais")) {
+    const base = [home, { label: "Essais en ligne", to: "/essais/dashboard" }];
+    if (pathname === "/essais/dashboard" || pathname === "/essais") {
+      return [home, { label: "Essais en ligne" }];
+    }
+    if (pathname.endsWith("/new")) {
+      return [...base, { label: "Nouvelle demande d'essai" }];
+    }
+    if (pathname.includes("/history/")) {
+      return [...base, { label: "Dossier essai" }];
+    }
+    if (pathname.endsWith("/history")) {
+      return [...base, { label: "Historique essais" }];
+    }
+    if (pathname.endsWith("/edit")) {
+      return [...base, { label: "Modifier dossier essai" }];
+    }
+    if (/\/essais\/\d+/.test(pathname)) {
+      return [...base, { label: "Dossier essai" }];
+    }
+    return [home, { label: "Essais en ligne" }];
+  }
+
+  if (pathname.startsWith("/establishment/progress")) {
+    return [home, { label: "Suivi reception" }];
+  }
+
+  if (pathname.startsWith("/establishment/history")) {
+    return [home, { label: "Historique reception" }];
+  }
+
+  return [home, { label: "Page technicentre" }];
+}
+
 function getRoleLabel(role?: string) {
   switch (role) {
     case "AGENT":
       return "Technicentre";
     case "PERMANENT":
-      return "Permanent PM";
+      return "Permanent PPM";
+    case "PROJET":
+      return "Compte Projet";
     case "SUIVI":
       return "Visionnement demandes";
     case "ETABLISSEMENT":
@@ -87,15 +173,50 @@ function getRoleLabel(role?: string) {
   }
 }
 
+function getHeroTitle(role?: string, pathname?: string) {
+  if (role === "AGENT" || role === "ETABLISSEMENT") {
+    if (pathname?.startsWith("/essais")) {
+      return "Gestion des essais en ligne du materiel roulant";
+    }
+    if (
+      pathname?.startsWith("/technicentre/acheminements") ||
+      pathname?.startsWith("/technicentre/reception") ||
+      pathname?.startsWith("/technicentre/demande")
+    ) {
+      return "Gestion d'acheminement du materiel roulant";
+    }
+    return "Gestion d'acheminement et d'essais en ligne du materiel roulant";
+  }
+  return "Gestion d'acheminement et d'essais en ligne du materiel roulant";
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const location = useLocation();
-  const navigation = getNavigation(user?.role);
+  const navigate = useNavigate();
+  const navigation = getNavigation(user?.role, location.pathname);
+  const heroTitle = getHeroTitle(user?.role, location.pathname);
   const heroConfig = roleBackgrounds[user?.role ?? ""] ?? defaultDashboardHero;
+  const isTechnicentreRole = user?.role === "AGENT" || user?.role === "ETABLISSEMENT";
+  const hideTechnicentreContextNavbar =
+    location.pathname === "/technicentre" ||
+    location.pathname === "/technicentre/dashboard" ||
+    location.pathname === "/technicentre/acheminements" ||
+    location.pathname === "/establishment/dashboard";
+  const technicentreBreadcrumbs = isTechnicentreRole ? getTechnicentreBreadcrumbs(location.pathname) : [];
+  const technicentreCurrentPage =
+    technicentreBreadcrumbs.length > 0 ? technicentreBreadcrumbs[technicentreBreadcrumbs.length - 1].label : "";
+  const isTechnicentreLanding =
+    location.pathname === "/technicentre" ||
+    location.pathname === "/technicentre/dashboard" ||
+    location.pathname === "/technicentre/acheminements" ||
+    location.pathname === "/establishment/dashboard";
   const isTechnicentreHome =
     location.pathname === "/technicentre" ||
     location.pathname === "/technicentre/dashboard" ||
-    location.pathname === "/establishment/dashboard";
+    location.pathname === "/technicentre/acheminements" ||
+    location.pathname === "/establishment/dashboard" ||
+    location.pathname === "/projet/essais/dashboard";
 
   useEffect(() => {
     if (!user?.role) {
@@ -103,10 +224,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
 
     const routesByRole: Record<string, string[]> = {
-      AGENT: ["/technicentre/reception", "/technicentre/demande", "/technicentre/demande/history"],
-      ETABLISSEMENT: ["/technicentre/reception", "/technicentre/demande", "/technicentre/demande/history"],
-      PERMANENT: ["/permanent/map"],
-      SUIVI: ["/tracking/requests", "/tracking/reception-quality"],
+      AGENT: ["/technicentre/acheminements", "/technicentre/reception", "/technicentre/demande", "/essais/history"],
+      ETABLISSEMENT: ["/technicentre/acheminements", "/technicentre/reception", "/technicentre/demande", "/essais/history"],
+      PROJET: ["/projet/essais/new", "/projet/essais/history"],
+      PERMANENT: ["/permanent/map", "/permanent/essais"],
+      SUIVI: ["/tracking/requests", "/tracking/reception-quality", "/tracking/essais", "/tracking/essais/performance"],
       ADMIN: ["/admin/accounts", "/admin/request-config"],
     };
 
@@ -127,9 +249,28 @@ export function AppShell({ children }: { children: ReactNode }) {
     preloadRoute(route);
   };
 
+  const handleTechnicentreBack = () => {
+    if (!isTechnicentreRole) {
+      return;
+    }
+    if (location.pathname === "/technicentre" || location.pathname === "/technicentre/dashboard") {
+      navigate("/technicentre");
+      return;
+    }
+    navigate(-1);
+  };
+
   return (
-    <div className={`${isTechnicentreHome ? "h-screen overflow-hidden" : "min-h-screen"} px-4 py-5 md:px-8 md:py-7`}>
-      <div className={`mx-auto max-w-7xl ${isTechnicentreHome ? "flex h-full flex-col justify-center" : ""}`}>
+    <div className={`${isTechnicentreLanding ? "h-screen overflow-hidden" : "min-h-screen"} px-4 py-5 md:px-8 md:py-7`}>
+      <div
+        className={`mx-auto max-w-7xl ${
+          isTechnicentreLanding
+            ? "flex h-full flex-col justify-center"
+            : isTechnicentreHome
+              ? "flex min-h-[calc(100vh-3.5rem)] flex-col justify-center"
+              : ""
+        }`}
+      >
         <div
           className={`panel-shell relative overflow-hidden rounded-[2rem] px-6 py-5 md:px-8 ${isTechnicentreHome ? "mb-4" : "mb-6"}`}
           style={{
@@ -154,7 +295,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <path d="M13 12h8" />
               <path d="m18 7 5 5-5 5" />
             </svg>
-            Déconnexion
+            Deconnexion
           </button>
 
           <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
@@ -171,14 +312,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
               <div>
                 <h1 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">
-                  Gestion d'acheminement du matériel roulant
+                  {heroTitle}
                 </h1>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300 md:text-base">
-                  Espace de pilotage unifié pour la création, l'analyse, le suivi et la confirmation des
-                  acheminements.
-                </p>
               </div>
-
               <div className="flex flex-wrap gap-3 text-sm text-slate-200">
                 <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3">
                   <div className="flex items-center gap-2">
@@ -201,34 +337,38 @@ export function AppShell({ children }: { children: ReactNode }) {
               </div>
             </div>
 
-            <div className="flex flex-col items-stretch gap-3 pt-6 xl:items-end xl:self-end xl:pt-0">
-              {user?.role === "ADMIN" ? (
-                <div className="flex flex-wrap gap-2 xl:justify-end">
+            <div className="flex flex-col items-stretch gap-3 pt-6 xl:items-end xl:self-end xl:pb-1 xl:pt-0">
+              {navigation.length > 0 ? (
+                <div
+                  className={`nav-pill-row ${user?.role === "ADMIN" || isTechnicentreRole ? "xl:justify-end" : ""}`}
+                >
                   {navigation.map((item) => (
                     <NavLink
                       key={item.to}
                       to={item.to}
                       onMouseEnter={() => handlePreload(item.to)}
                       onFocus={() => handlePreload(item.to)}
-                      className={({ isActive }) => `nav-pill ${isActive ? "nav-pill-active" : "nav-pill-idle"}`}
+                      className={({ isActive }) => {
+                        const forceActiveHome = isTechnicentreRole && item.icon === "home";
+                        return `nav-pill ${item.icon ? "nav-pill-with-icon" : ""} ${isActive || forceActiveHome ? "nav-pill-active" : "nav-pill-idle"}`;
+                      }}
                     >
-                      {item.label}
-                    </NavLink>
-                  ))}
-                </div>
-              ) : null}
-
-              {user?.role !== "ADMIN" ? (
-                <div className="flex flex-wrap gap-2">
-                  {navigation.map((item) => (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      onMouseEnter={() => handlePreload(item.to)}
-                      onFocus={() => handlePreload(item.to)}
-                      className={({ isActive }) => `nav-pill ${isActive ? "nav-pill-active" : "nav-pill-idle"}`}
-                    >
-                      {item.label}
+                      {item.icon === "home" ? (
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 24 24"
+                          className="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M3 11.5 12 4l9 7.5" />
+                          <path d="M5 10.5V20h14v-9.5" />
+                        </svg>
+                      ) : null}
+                      <span>{item.label}</span>
                     </NavLink>
                   ))}
                 </div>
@@ -236,6 +376,40 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           </div>
         </div>
+
+        {isTechnicentreRole && !hideTechnicentreContextNavbar ? (
+          <div className={`${isTechnicentreHome ? "mb-3" : "mb-4"} panel px-4 py-3 md:px-5`}>
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <button
+                type="button"
+                onClick={handleTechnicentreBack}
+                className="inline-flex w-fit items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M15 6 9 12l6 6" />
+                </svg>
+                Retour
+              </button>
+
+              <div className="min-w-0">
+                <PageBreadcrumbs items={technicentreBreadcrumbs} />
+              </div>
+
+              <div className="inline-flex w-fit items-center rounded-full border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-brand-700">
+                {technicentreCurrentPage}
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         <div className={`${isTechnicentreHome ? "flex flex-1 items-center" : "space-y-4"}`}>
           <div className={`animate-enter ${isTechnicentreHome ? "w-full" : ""}`}>{children}</div>

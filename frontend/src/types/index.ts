@@ -1,4 +1,4 @@
-export type Role = "AGENT" | "PERMANENT" | "ETABLISSEMENT" | "ADMIN" | "SUIVI";
+export type Role = "AGENT" | "PERMANENT" | "ETABLISSEMENT" | "PROJET" | "ADMIN" | "SUIVI";
 export type MaterialType = string;
 export type TransportMode = string;
 export type TransportType = string;
@@ -182,6 +182,67 @@ export interface AdminEstablishmentCreatePayload {
   outlook_email?: string | null;
   lat: number;
   lon: number;
+}
+
+export interface OnlineTrialHistoryItem {
+  id: number;
+  status: AlertStatus;
+  changed_at: string;
+  note?: string | null;
+  changed_by?: User | null;
+}
+
+export interface OnlineTrialDecisionRecord {
+  id: number;
+  decision: Decision;
+  comment?: string | null;
+  material_decisions?: string | null;
+  permanent_user: User;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OnlineTrialAttachment {
+  id: number;
+  filename: string;
+  stored_path: string;
+  content_type: string;
+  uploaded_at: string;
+}
+
+export interface OnlineTrial {
+  id: number;
+  dossier_number?: number;
+  dossier_parent_id?: number | null;
+  dossier_iteration?: number;
+  dossier_label?: string;
+  created_at: string;
+  updated_at?: string | null;
+  material_type: MaterialType;
+  material_ref: string;
+  material_concerned?: string | null;
+  departure_date?: string | null;
+  arrival_date?: string | null;
+  request_date?: string | null;
+  speed_kmh?: number | null;
+  parcours_aller?: boolean;
+  parcours_retour?: boolean;
+  transport_mode: TransportMode;
+  transport_type: TransportType;
+  problem_description: string;
+  maintenance_state: MaintenanceState;
+  severity: Severity;
+  transport_conditions_initial: string;
+  status: AlertStatus;
+  pm_reference_at?: string | null;
+  trial_material_progress?: string | null;
+  created_by: User;
+  station: Station;
+  departure_station?: Station | null;
+  arrival_station?: Station | null;
+  history: OnlineTrialHistoryItem[];
+  attachments: OnlineTrialAttachment[];
+  permanent_decision?: OnlineTrialDecisionRecord | null;
 }
 
 export interface AdminMailRoutingSettings {

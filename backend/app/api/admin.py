@@ -29,6 +29,11 @@ from app.models.alert import (
 from app.models.app_setting import AppSetting
 from app.models.establishment import Establishment
 from app.models.enums import UserRole
+from app.models.online_trial import (
+    OnlineTrialDecision,
+    OnlineTrialRequest,
+    OnlineTrialStatusHistory,
+)
 from app.models.station import Station
 from app.models.user import User
 from app.services.alert_form_config import get_alert_form_config, save_alert_form_config
@@ -148,12 +153,13 @@ def _user_activity_history(db: Session, user_id: int) -> list[AdminUserActivity]
 
     if user.role == UserRole.SUIVI:
         tracked_alerts = _alerts_for_user(db, user)
-        return [
+        tracked_trials = _online_trials_for_user(db, user)
+        timeline = [
             AdminUserActivity(
                 timestamp=alert.updated_at or alert.created_at,
                 action=alert.status.value,
                 details=(
-                    f"{alert.material_ref} - {alert.station.name if alert.station else ''}"
+                    f"Acheminement {alert.material_ref} - {alert.station.name if alert.station else ''}"
                     + (
                         f" vers {alert.permanent_decision.destination_establishment.name}"
                         if alert.permanent_decision and alert.permanent_decision.destination_establishment
@@ -164,6 +170,17 @@ def _user_activity_history(db: Session, user_id: int) -> list[AdminUserActivity]
             )
             for alert in tracked_alerts
         ]
+        timeline.extend(
+            AdminUserActivity(
+                timestamp=trial.updated_at or trial.created_at,
+                action=trial.status.value,
+                details=f"Essai en ligne {trial.material_ref} - {trial.station.name if trial.station else ''}".strip(),
+                alert_id=None,
+            )
+            for trial in tracked_trials
+        )
+        timeline.sort(key=lambda item: item.timestamp, reverse=True)
+        return timeline
 
     history: list[AdminUserActivity] = []
 
@@ -175,6 +192,16 @@ def _user_activity_history(db: Session, user_id: int) -> list[AdminUserActivity]
                 action="ALERTE_CREEE",
                 details=f"Alerte {alert.material_ref} creee a {alert.station_id}",
                 alert_id=alert.id,
+            )
+        )
+    online_trials = list(db.execute(select(OnlineTrialRequest).where(OnlineTrialRequest.created_by_user_id == user_id)).scalars())
+    for trial in online_trials:
+        history.append(
+            AdminUserActivity(
+                timestamp=trial.created_at,
+                action="ESSAI_CREE",
+                details=f"Demande essai {trial.material_ref} creee a {trial.station_id}",
+                alert_id=None,
             )
         )
 
@@ -190,6 +217,18 @@ def _user_activity_history(db: Session, user_id: int) -> list[AdminUserActivity]
                 alert_id=item.alert_id,
             )
         )
+    trial_status_entries = list(
+        db.execute(select(OnlineTrialStatusHistory).where(OnlineTrialStatusHistory.changed_by_user_id == user_id)).scalars()
+    )
+    for item in trial_status_entries:
+        history.append(
+            AdminUserActivity(
+                timestamp=item.changed_at,
+                action="STATUT_ESSAI_MIS_A_JOUR",
+                details=_describe_status_history(item.status.value, item.note),
+                alert_id=None,
+            )
+        )
 
     decisions = list(db.execute(select(PermanentDecision).where(PermanentDecision.permanent_user_id == user_id)).scalars())
     for decision in decisions:
@@ -199,6 +238,18 @@ def _user_activity_history(db: Session, user_id: int) -> list[AdminUserActivity]
                 action="DECISION_PERMANENT",
                 details=f"Decision {decision.decision.value} vers etablissement {decision.destination_establishment_id}",
                 alert_id=decision.alert_id,
+            )
+        )
+    trial_decisions = list(
+        db.execute(select(OnlineTrialDecision).where(OnlineTrialDecision.permanent_user_id == user_id)).scalars()
+    )
+    for decision in trial_decisions:
+        history.append(
+            AdminUserActivity(
+                timestamp=decision.updated_at or decision.created_at,
+                action="DECISION_ESSAI_PERMANENT",
+                details=f"Decision essai {decision.decision.value}",
+                alert_id=None,
             )
         )
 
@@ -332,6 +383,28 @@ def _alerts_for_user(db: Session, user: User) -> list[Alert]:
 
     alerts = list(db.execute(stmt).unique().scalars())
     return apply_alert_collection_derived_fields(alerts)
+
+
+def _online_trials_for_user(db: Session, user: User) -> list[OnlineTrialRequest]:
+    stmt = (
+        select(OnlineTrialRequest)
+        .options(
+            joinedload(OnlineTrialRequest.station),
+            joinedload(OnlineTrialRequest.created_by),
+            joinedload(OnlineTrialRequest.history).joinedload(OnlineTrialStatusHistory.changed_by),
+            joinedload(OnlineTrialRequest.permanent_decision).joinedload(OnlineTrialDecision.permanent_user),
+        )
+        .order_by(OnlineTrialRequest.created_at.desc())
+    )
+
+    if user.role in {UserRole.AGENT, UserRole.ETABLISSEMENT, UserRole.PROJET}:
+        stmt = stmt.where(OnlineTrialRequest.created_by_user_id == user.id)
+    elif user.role == UserRole.PERMANENT:
+        stmt = stmt.join(OnlineTrialDecision, OnlineTrialDecision.trial_id == OnlineTrialRequest.id).where(
+            OnlineTrialDecision.permanent_user_id == user.id
+        )
+
+    return list(db.execute(stmt).unique().scalars())
 
 
 def _filter_alerts_by_period(
@@ -1125,6 +1198,9 @@ def delete_user(
                 )
             ).first(),
             db.execute(select(Notification.id).join(Alert).where(Alert.created_by_user_id == user_id)).first(),
+            db.execute(select(OnlineTrialRequest.id).where(OnlineTrialRequest.created_by_user_id == user_id)).first(),
+            db.execute(select(OnlineTrialStatusHistory.id).where(OnlineTrialStatusHistory.changed_by_user_id == user_id)).first(),
+            db.execute(select(OnlineTrialDecision.id).where(OnlineTrialDecision.permanent_user_id == user_id)).first(),
         ]
     )
     if has_activity:

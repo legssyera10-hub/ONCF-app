@@ -1,23 +1,25 @@
-# ONCF - Gestion d'acheminement du materiel roulant
+# ONCF - Gestion d'acheminement et d'essais en ligne du materiel roulant
 
-Plateforme full-stack pour gerer les demandes d'acheminement, les decisions PM et la confirmation de reception entre technicentres ONCF.
+Plateforme full-stack pour gerer les demandes d'acheminement, les decisions PM, la confirmation de reception et le nouveau module de demandes d'essais en ligne.
 
 ## Etat actuel (Mai 2026)
 
 - Authentification JWT et controle d'acces par role.
 - Workflow de bout en bout: creation, traitement PM, reception, suivi.
+- Module separe "Essais en ligne": creation, analyse PM, suivi aller/retour, retard par materiel.
 - Historique de statut par dossier.
 - Notifications temps reel via WebSocket (`/ws/alerts`).
 - Administration des comptes et export.
 
 ## Roles metier (plateforme)
 
-La plateforme est organisee autour de 4 roles metier:
+La plateforme est organisee autour de 5 roles metier:
 
 1. `Technicentre` (demandeur / recepteur).
-2. `Permanent PM`.
-3. `Admin`.
-4. `Suivi`.
+2. `Projet` (demandeur essais en ligne).
+3. `Permanent PM`.
+4. `Admin`.
+5. `Suivi`.
 
 Note de compatibilite: quelques alias techniques historiques restent dans le code, mais la navigation metier officielle se fait via `/technicentre/*`.
 
@@ -70,6 +72,7 @@ npm run dev
 - `admin / pass123`
 - `permanent / pass123`
 - `suivi / pass123`
+- `projet / pass123`
 - `tmic / pass123`
 - `tmrc / pass123`
 - `tmlc / pass123`
@@ -94,6 +97,10 @@ docker compose up --build
 - `GET /alerts`
 - `POST /alerts/{id}/decision`
 - `POST /alerts/{id}/confirm`
+- `POST /online-trials`
+- `GET /online-trials`
+- `POST /online-trials/{id}/decision`
+- `POST /online-trials/{id}/progress`
 - `GET /notifications`
 - `GET /stations`
 - `GET /establishments`

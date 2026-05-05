@@ -353,25 +353,14 @@ export function NewAlertPage() {
 
   return (
     <div className="panel mx-auto max-w-5xl p-6 sm:p-8">
-      <div className="relative flex min-h-[3rem] items-start justify-center">
-        <button
-          type="button"
-          onClick={() => navigate(isEditMode ? "/technicentre/demande/history" : "/technicentre/demande")}
-          className="btn-secondary absolute left-0 top-0"
-        >
-          Retour
-        </button>
-
-        <div className="pt-1 text-center">
-          <h2 className="text-3xl font-semibold tracking-tight text-slate-950">
-            {isEditMode ? "Modifier la demande d'acheminement" : "Créer une demande d'acheminement"}
-          </h2>
-          {isEditMode ? (
-            <p className="mt-2 text-sm text-slate-500">Mettez à jour la demande. La version précédente restera archivée.</p>
-          ) : null}
-        </div>
+      <div className="text-center">
+        <h2 className="text-3xl font-semibold tracking-tight text-slate-950">
+          {isEditMode ? "Modifier la demande d'acheminement" : "Creer une demande d'acheminement"}
+        </h2>
+        {isEditMode ? (
+          <p className="mt-2 text-sm text-slate-500">Mettez a jour la demande. La version precedente restera archivee.</p>
+        ) : null}
       </div>
-
       <SecurityBanner />
 
       <form
@@ -803,4 +792,5 @@ export function NewAlertPage() {
     </div>
   );
 }
+
 

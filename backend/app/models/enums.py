@@ -7,6 +7,7 @@ class UserRole(str, Enum):
     AGENT = "AGENT"
     PERMANENT = "PERMANENT"
     ETABLISSEMENT = "ETABLISSEMENT"
+    PROJET = "PROJET"
     ADMIN = "ADMIN"
     SUIVI = "SUIVI"
 
