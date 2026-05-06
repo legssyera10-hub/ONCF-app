@@ -7,19 +7,72 @@ import type { OnlineTrial } from "../types";
 import { API_BASE_URL } from "../utils/api";
 import { parsePpmMaterialDecisions } from "../utils/alertMaterials";
 import { getOnlineTrialDirectionTitleSuffix, getOnlineTrialParcoursLabel } from "../utils/onlineTrialDirection";
-import { formatDateTime } from "../utils/format";
-import { buildOnlineTrialMaterialRows, parseOnlineTrialProgress } from "../utils/onlineTrialMaterials";
+import { formatDateTime, formatDelayMinutes, parseApiDate } from "../utils/format";
+import {
+  buildOnlineTrialMaterialRows,
+  parseOnlineTrialProgress,
+  type OnlineTrialProgressEntry,
+} from "../utils/onlineTrialMaterials";
 import { getOnlineTrialStatusLabel } from "../utils/onlineTrialStatus";
-
-type MaterialPmStatus = "ACCEPTEE" | "ANNULEE" | null;
 
 type PendingDecisionPayload = {
   decision: "CONFIRMER" | "ANNULER" | "MODIFIER";
-  commentaire: string;
-  accepted_material_indexes: number[];
-  canceled_material_indexes: number[];
-  material_reason_updates: Array<{ index: number; motif_pm?: string }>;
+  commentaire?: string;
 };
+
+function inferTrialResult(entry?: OnlineTrialProgressEntry): "CONCLUANT" | "NON_CONCLUANT" {
+  if (entry?.result === "CONCLUANT" || entry?.result === "NON_CONCLUANT") {
+    return entry.result;
+  }
+  return (entry?.remarks ?? "").trim().length > 0 ? "NON_CONCLUANT" : "CONCLUANT";
+}
+
+function getTrialResultLabel(entry?: OnlineTrialProgressEntry): string {
+  if (!entry?.performed) {
+    return "-";
+  }
+  return inferTrialResult(entry) === "NON_CONCLUANT" ? "Non Concluant" : "Concluant";
+}
+
+function getTrialDelayDisplay(entry: OnlineTrialProgressEntry | undefined, departureDate: string | null | undefined): string {
+  const departure = parseApiDate(departureDate);
+  if (!departure) {
+    return "-";
+  }
+
+  const referenceDate = entry?.performed ? parseApiDate(entry.realization_date) : new Date();
+  if (!referenceDate) {
+    return "-";
+  }
+
+  const rawMinutes = Math.floor((referenceDate.getTime() - departure.getTime()) / 60000);
+  const minutes = entry?.performed ? rawMinutes : Math.max(0, rawMinutes);
+  const formattedDelay = formatDelayMinutes(minutes);
+  return entry?.performed ? formattedDelay : `${formattedDelay} (en cours)`;
+}
+
+function getDisplayedPpmStatus(
+  trialStatus: OnlineTrial["status"],
+  rowPpmStatus?: "ACCEPTEE" | "ANNULEE" | "MODIFIEE" | null
+): string {
+  if (trialStatus === "A_MODIFIER") return "A modifier";
+  if (trialStatus === "ANNULEE") return "Annulee";
+  if (trialStatus === "MODIFIEE") return "Modifiee";
+
+  if (rowPpmStatus === "ACCEPTEE") return "Acceptee";
+  if (rowPpmStatus === "ANNULEE") return "Annulee";
+  if (rowPpmStatus === "MODIFIEE") return "Modifiee";
+
+  return "En attente";
+}
+
+function getDisplayedPpmStatusClass(ppmStatus: string): string {
+  if (ppmStatus === "Acceptee") return "font-semibold text-emerald-700";
+  if (ppmStatus === "Annulee") return "font-semibold text-rose-700";
+  if (ppmStatus === "A modifier") return "font-semibold text-amber-700";
+  if (ppmStatus === "Modifiee") return "font-semibold text-violet-700";
+  return "text-slate-700";
+}
 
 export function PermanentOnlineTrialDetailPage() {
   const { token } = useAuth();
@@ -30,13 +83,7 @@ export function PermanentOnlineTrialDetailPage() {
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [action, setAction] = useState<"CONFIRMER" | "ANNULER" | "MODIFIER">("CONFIRMER");
-  const [comment, setComment] = useState("");
-  const [materialStatuses, setMaterialStatuses] = useState<Record<number, MaterialPmStatus>>({});
-  const [materialReasons, setMaterialReasons] = useState<Record<number, string>>({});
-  const [showCancelWarning, setShowCancelWarning] = useState(false);
-  const [cancelWarningSummary, setCancelWarningSummary] = useState("");
-  const [cancelWarningCount, setCancelWarningCount] = useState(0);
-  const [pendingPayload, setPendingPayload] = useState<PendingDecisionPayload | null>(null);
+  const [decisionReason, setDecisionReason] = useState("");
 
   async function load() {
     if (!token || !id) return;
@@ -44,19 +91,6 @@ export function PermanentOnlineTrialDetailPage() {
       setError("");
       const result = await api.onlineTrialById(token, Number(id));
       setTrial(result);
-      const decisions = parsePpmMaterialDecisions(result.permanent_decision?.material_decisions);
-      const statuses: Record<number, MaterialPmStatus> = {};
-      const reasons: Record<number, string> = {};
-      for (const row of buildOnlineTrialMaterialRows(result)) {
-        const rawStatus = decisions[row.index]?.ppm_status;
-        statuses[row.index] = rawStatus === "ACCEPTEE" || rawStatus === "ANNULEE" ? rawStatus : null;
-        reasons[row.index] = decisions[row.index]?.ppm_reason ?? "";
-      }
-      setMaterialStatuses(statuses);
-      setMaterialReasons(reasons);
-      if (result.permanent_decision?.comment) {
-        setComment(result.permanent_decision.comment);
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur de chargement");
     }
@@ -72,6 +106,15 @@ export function PermanentOnlineTrialDetailPage() {
     [trial?.permanent_decision?.material_decisions]
   );
   const progress = useMemo(() => parseOnlineTrialProgress(trial?.trial_material_progress), [trial?.trial_material_progress]);
+  const globalCancelOrModifyReason = useMemo(() => {
+    if (!trial) return "";
+    const historyReason =
+      [...trial.history]
+        .sort((a, b) => new Date(b.changed_at).getTime() - new Date(a.changed_at).getTime())
+        .find((item) => (item.status === "ANNULEE" || item.status === "A_MODIFIER") && (item.note || "").trim())?.note
+        ?.trim() ?? "";
+    return historyReason || trial.permanent_decision?.comment?.trim() || "";
+  }, [trial]);
 
   if (!trial && error) {
     return <div className="panel border border-rose-200 p-6 text-sm text-rose-600">{error}</div>;
@@ -86,29 +129,15 @@ export function PermanentOnlineTrialDetailPage() {
   const directionSuffix = getOnlineTrialDirectionTitleSuffix(trial);
   const parcoursLabel = getOnlineTrialParcoursLabel(trial);
   const isClosedTrial =
-    trial.status === "RECEPTION_COMPLETE" || trial.status === "ANNULEE" || trial.status === "MODIFIEE";
+    trial.status === "RECEPTION_COMPLETE" ||
+    trial.status === "ANNULEE" ||
+    trial.status === "MODIFIEE" ||
+    trial.status === "A_MODIFIER";
 
   async function sendDecision(payload: PendingDecisionPayload) {
     if (!token || !trial) return;
     await api.createOnlineTrialDecision(token, trial.id, payload);
     await load();
-  }
-
-  async function confirmCancellationSubmit() {
-    if (!pendingPayload) return;
-    const data = pendingPayload;
-    setShowCancelWarning(false);
-    setPendingPayload(null);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    setSubmitting(true);
-    try {
-      await sendDecision(data);
-      setMessage("Decision enregistree.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur de validation");
-    } finally {
-      setSubmitting(false);
-    }
   }
 
   return (
@@ -148,26 +177,40 @@ export function PermanentOnlineTrialDetailPage() {
                 <th className="px-3 py-3">Serie</th>
                 <th className="px-3 py-3">Materiel concerne</th>
                 <th className="px-3 py-3">Etat PPM</th>
+                <th className="px-3 py-3">Motif d'annulation/ modification</th>
                 <th className="px-3 py-3">Essai realise</th>
                 <th className="px-3 py-3">Date de realisation</th>
+                <th className="px-3 py-3">Resultat</th>
                 <th className="px-3 py-3">Observation</th>
+                <th className="px-3 py-3">Retard</th>
               </tr>
             </thead>
             <tbody>
               {materialRows.map((row) => {
-                const ppmStatus = ppmDecisions[row.index]?.ppm_status ?? "EN_ATTENTE";
+                const ppmStatus = getDisplayedPpmStatus(trial.status, ppmDecisions[row.index]?.ppm_status);
+                const rowReason = (ppmDecisions[row.index]?.ppm_reason || "").trim() || globalCancelOrModifyReason || "-";
                 const rowProgress = progress[row.index];
+                const rowResult = getTrialResultLabel(rowProgress);
+                const rowObservation =
+                  rowResult === "Concluant"
+                    ? ""
+                    : (rowProgress?.remarks ?? "").trim() || "-";
                 return (
                   <tr key={row.id} className="border-t border-slate-200">
                     <td className="px-3 py-3 font-semibold text-slate-900">{row.type}</td>
                     <td className="px-3 py-3">{row.serie}</td>
                     <td className="px-3 py-3">{row.concerned}</td>
-                    <td className="px-3 py-3">{ppmStatus}</td>
+                    <td className="px-3 py-3">
+                      <span className={getDisplayedPpmStatusClass(ppmStatus)}>{ppmStatus}</span>
+                    </td>
+                    <td className="px-3 py-3">{rowReason}</td>
                     <td className="px-3 py-3">{rowProgress?.performed ? "Oui" : "Non"}</td>
                     <td className="px-3 py-3">
                       {rowProgress?.realization_date ? formatDateTime(rowProgress.realization_date) : "-"}
                     </td>
-                    <td className="px-3 py-3">{rowProgress?.remarks || "-"}</td>
+                    <td className="px-3 py-3">{rowResult}</td>
+                    <td className="px-3 py-3">{rowObservation}</td>
+                    <td className="px-3 py-3">{getTrialDelayDisplay(rowProgress, trial.departure_date)}</td>
                   </tr>
                 );
               })}
@@ -232,15 +275,11 @@ export function PermanentOnlineTrialDetailPage() {
         ) : null}
       </section>
 
-      <section className="panel p-6">
-        <h3 className="text-lg font-semibold text-slate-900">Decision permanent</h3>
-        {isClosedTrial ? (
-          <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
-            Dossier cloture: aucune modification supplementaire n'est autorisee.
-          </div>
-        ) : null}
+      {!isClosedTrial ? (
+        <section className="panel p-6">
+          <h3 className="text-lg font-semibold text-slate-900">Decision permanent</h3>
 
-        {!isClosedTrial ? <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <button
             type="button"
             onClick={() => setAction("MODIFIER")}
@@ -274,162 +313,61 @@ export function PermanentOnlineTrialDetailPage() {
           >
             Accepter / Traiter
           </button>
-        </div> : null}
-
-        {action === "CONFIRMER" && !isClosedTrial ? (
-          <div className="mt-4 overflow-x-auto rounded-2xl border border-emerald-200 bg-white">
-            <table className="min-w-full text-left text-sm text-slate-700">
-              <thead className="bg-emerald-50 text-xs uppercase tracking-[0.14em] text-emerald-800">
-                <tr>
-                  <th className="px-3 py-3">Type</th>
-                  <th className="px-3 py-3">Serie</th>
-                  <th className="px-3 py-3">Materiel concerne</th>
-                  <th className="px-3 py-3">Decision PPM</th>
-                  <th className="px-3 py-3">Motif PPM</th>
-                </tr>
-              </thead>
-              <tbody>
-                {materialRows.map((row) => {
-                  const statusValue = materialStatuses[row.index] ?? null;
-                  return (
-                    <tr key={row.id} className="border-t border-emerald-100">
-                      <td className="px-3 py-3 font-semibold text-slate-900">{row.type}</td>
-                      <td className="px-3 py-3">{row.serie}</td>
-                      <td className="px-3 py-3">{row.concerned}</td>
-                      <td className="px-3 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
-                              statusValue === "ACCEPTEE"
-                                ? "border-emerald-400 bg-emerald-100 text-emerald-900"
-                                : "border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:bg-emerald-50"
-                            }`}
-                            onClick={() =>
-                              setMaterialStatuses((prev) => ({
-                                ...prev,
-                                [row.index]: prev[row.index] === "ACCEPTEE" ? null : "ACCEPTEE",
-                              }))
-                            }
-                          >
-                            Acceptee
-                          </button>
-                          <button
-                            type="button"
-                            className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
-                              statusValue === "ANNULEE"
-                                ? "border-rose-400 bg-rose-100 text-rose-900"
-                                : "border-slate-200 bg-white text-slate-600 hover:border-rose-300 hover:bg-rose-50"
-                            }`}
-                            onClick={() =>
-                              setMaterialStatuses((prev) => ({
-                                ...prev,
-                                [row.index]: prev[row.index] === "ANNULEE" ? null : "ANNULEE",
-                              }))
-                            }
-                          >
-                            Annulee
-                          </button>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <input
-                          className="input h-10 w-full min-w-[220px]"
-                          placeholder="Motif PPM pour ce materiel"
-                          value={materialReasons[row.index] ?? ""}
-                          onChange={(event) =>
-                            setMaterialReasons((prev) => ({
-                              ...prev,
-                              [row.index]: event.target.value,
-                            }))
-                          }
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
           </div>
-        ) : null}
 
-        {!isClosedTrial ? <label className="mt-4 block space-y-2">
-          <span className="text-base font-medium text-slate-700">
-            {action === "MODIFIER" ? "Message de modification" : action === "ANNULER" ? "Motif d'annulation" : "Commentaire PPM (optionnel)"}
-          </span>
-          <textarea
-            className="input min-h-28 rounded-[1.1rem] bg-slate-50 text-base"
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder={
-              action === "MODIFIER"
-                ? "Expliquez les modifications demandees au createur."
-                : action === "ANNULER"
-                  ? "Expliquez le motif d'annulation de la demande d'essai."
-                  : "Commentaire permanent."
-            }
-          />
-        </label> : null}
+          {action === "CONFIRMER" ? (
+            <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+              la demande d'essai sera confirmee
+            </div>
+          ) : null}
 
-        {!isClosedTrial ? <button
+          {action !== "CONFIRMER" ? (
+          <label className="mt-4 block space-y-2">
+            <span className="text-base font-medium text-slate-700">
+              {action === "ANNULER" ? "Motif d'annulation" : "Motif de modification"}
+            </span>
+            <textarea
+              className="input min-h-24 rounded-[1.1rem] bg-slate-50 text-base"
+              value={decisionReason}
+              onChange={(e) => setDecisionReason(e.target.value)}
+              placeholder={action === "ANNULER" ? "Saisir le motif d'annulation" : "Saisir le motif de modification"}
+            />
+          </label>
+          ) : null}
+
+          <button
           type="button"
           className="btn-primary mt-4"
-          disabled={submitting || showCancelWarning}
+          disabled={submitting}
           onClick={async () => {
             if (!token) return;
             setError("");
             setMessage("");
-
-            const commentaire = comment.trim();
-            if (action === "MODIFIER" && !commentaire) {
-              setError("Le message de modification est obligatoire.");
-              return;
-            }
+            const commentaire = decisionReason.trim();
             if (action === "ANNULER" && !commentaire) {
               setError("Le motif d'annulation est obligatoire.");
               return;
             }
-
-            const accepted = materialRows
-              .map((row) => row.index)
-              .filter((index) => materialStatuses[index] === "ACCEPTEE");
-            const canceled = materialRows
-              .map((row) => row.index)
-              .filter((index) => materialStatuses[index] === "ANNULEE");
-
-            if (action === "CONFIRMER" && accepted.length === 0 && canceled.length === 0) {
-              setError("Selectionnez au moins un materiel a accepter ou annuler.");
+            if (action === "MODIFIER" && !commentaire) {
+              setError("Le motif de modification est obligatoire.");
               return;
             }
-
             const payload: PendingDecisionPayload = {
               decision: action,
-              commentaire,
-              accepted_material_indexes: accepted,
-              canceled_material_indexes: canceled,
-              material_reason_updates: materialRows.map((row) => ({
-                index: row.index,
-                motif_pm: materialReasons[row.index]?.trim() || undefined,
-              })),
-            };
-
-            if (action === "CONFIRMER" && canceled.length > 0) {
-              const summary = materialRows
-                .filter((row) => canceled.includes(row.index))
-                .map((row) => `${row.type} ${row.serie}`.trim())
-                .join(", ");
-              setCancelWarningCount(canceled.length);
-              setCancelWarningSummary(summary);
-              setPendingPayload(payload);
-              setShowCancelWarning(true);
-              return;
+              commentaire: action === "CONFIRMER" ? undefined : commentaire,
             }
 
             try {
-              window.scrollTo({ top: 0, behavior: "smooth" });
               setSubmitting(true);
               await sendDecision(payload);
-              setMessage("Decision enregistree.");
+              setMessage(
+                action === "CONFIRMER"
+                  ? "Decision enregistree: demande acceptee et traitee."
+                  : action === "MODIFIER"
+                    ? "Decision enregistree: demande retournee pour modification."
+                    : "Decision enregistree: demande annulee."
+              );
+              window.scrollTo({ top: 0, behavior: "smooth" });
             } catch (err) {
               setError(err instanceof Error ? err.message : "Erreur de validation");
             } finally {
@@ -443,57 +381,10 @@ export function PermanentOnlineTrialDetailPage() {
               Validation...
             </span>
           ) : (
-            "Valider la decision PPM"
-          )}
-        </button> : null}
-      </section>
-
-      {showCancelWarning ? (
-        <div
-          className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/50 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="cancel-warning-title"
-        >
-          <div className="w-full max-w-2xl overflow-hidden rounded-[1.6rem] border border-amber-200 bg-white shadow-[0_32px_90px_-40px_rgba(15,23,42,0.72)]">
-            <div className="flex items-start gap-3 border-b border-amber-100 bg-amber-50 px-6 py-4">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-amber-300 bg-amber-100 text-base font-bold text-amber-700">
-                !
-              </span>
-              <div>
-                <h3 id="cancel-warning-title" className="text-lg font-semibold text-amber-900">
-                  Avertissement d'annulation
-                </h3>
-                <p className="text-sm text-amber-800">Cette action va annuler un ou plusieurs materiels.</p>
-              </div>
-            </div>
-            <div className="space-y-4 px-6 py-5">
-              <p className="text-sm text-slate-700">
-                Vous allez annuler <span className="font-semibold text-rose-700">{cancelWarningCount}</span> materiel(s)
-                {cancelWarningSummary ? ` : ${cancelWarningSummary}.` : "."}
-              </p>
-              <div className="flex flex-wrap justify-end gap-3">
-                <button
-                  type="button"
-                  className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                  onClick={() => {
-                    setShowCancelWarning(false);
-                    setPendingPayload(null);
-                  }}
-                >
-                  Retour
-                </button>
-                <button
-                  type="button"
-                  className="rounded-xl border border-rose-500 bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_16px_34px_-22px_rgba(225,29,72,0.82)] transition hover:bg-rose-700"
-                  onClick={() => void confirmCancellationSubmit()}
-                >
-                  Confirmer l'annulation
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+                "Valider la decision PPM"
+              )}
+          </button>
+        </section>
       ) : null}
     </div>
   );

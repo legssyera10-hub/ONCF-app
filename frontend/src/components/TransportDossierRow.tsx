@@ -39,6 +39,40 @@ function toDisplayValue(value?: string | number | null) {
   return String(value);
 }
 
+function normalizeModeToken(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+}
+
+function isMixedNormalMode(value: string) {
+  const mode = normalizeModeToken(value);
+  return (
+    mode.includes("NORMAL") &&
+    mode.includes("FRET") &&
+    (mode.includes("VOYAGEUR") || mode.includes("VOY") || mode.includes("FRET OU V"))
+  );
+}
+
+function speedLabel(mode?: string | null, speed?: number | null) {
+  if (speed != null) {
+    return `${speed} km/h`;
+  }
+
+  const modeValue = mode ?? "";
+  const normalizedMode = normalizeModeToken(modeValue);
+  if (isMixedNormalMode(modeValue)) {
+    return "Normal";
+  }
+  if (normalizedMode.includes("VOYAGEUR") || normalizedMode.includes("VOY")) {
+    return "Normal voyageur";
+  }
+  return "Normal fret";
+}
+
 function splitJoinedValues(value?: string | null) {
   return (value ?? "")
     .split(" + ")
@@ -127,12 +161,7 @@ function buildCells(alert: Alert, latestNote?: string | null, requesterLabel?: s
     { label: "Motif", value: toDisplayValue(alert.problem_description) },
     {
       label: "Vitesse",
-      value:
-        alert.transport_mode === "VOYAGEUR"
-          ? "Normal voyageur"
-          : alert.speed_kmh != null
-            ? `${alert.speed_kmh} km/h`
-            : "Normal fret",
+      value: speedLabel(alert.transport_mode, alert.speed_kmh),
     },
     { label: "Autres", value: toDisplayValue(alert.transport_conditions_initial) },
     { label: "Destinataire", value: destination },

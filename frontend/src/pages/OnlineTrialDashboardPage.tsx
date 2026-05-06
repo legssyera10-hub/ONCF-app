@@ -7,6 +7,81 @@ import { useLiveAlerts } from "../hooks/useLiveAlerts";
 import { preloadRoute } from "../routes/lazyRoutes";
 import type { OnlineTrial } from "../types";
 
+type TrialSectionKey =
+  | "SCHEDULED"
+  | "PENDING_PPM"
+  | "TO_UPDATE"
+  | "MODIFIED"
+  | "COMPLETED"
+  | "CANCELLED";
+
+type TrialSectionConfig = {
+  key: TrialSectionKey;
+  label: string;
+  statuses: OnlineTrial["status"][];
+  emptyMessage: string;
+  cardClassName: string;
+  labelClassName: string;
+  valueClassName: string;
+};
+
+const TRIAL_SECTION_CONFIGS: TrialSectionConfig[] = [
+  {
+    key: "SCHEDULED",
+    label: "Realisations programmees",
+    statuses: ["TRAITEE_PAR_PM"],
+    emptyMessage: "Aucune realisation programmee pour le moment.",
+    cardClassName: "border-amber-200 bg-amber-50",
+    labelClassName: "text-amber-700",
+    valueClassName: "text-amber-900",
+  },
+  {
+    key: "PENDING_PPM",
+    label: "En attente PPM",
+    statuses: ["EN_COURS_DE_TRAITEMENT"],
+    emptyMessage: "Aucune demande en attente PPM.",
+    cardClassName: "border-sky-200 bg-sky-50",
+    labelClassName: "text-sky-700",
+    valueClassName: "text-sky-900",
+  },
+  {
+    key: "TO_UPDATE",
+    label: "A modifier",
+    statuses: ["A_MODIFIER"],
+    emptyMessage: "Aucune demande a modifier.",
+    cardClassName: "border-amber-200 bg-amber-50",
+    labelClassName: "text-amber-700",
+    valueClassName: "text-amber-900",
+  },
+  {
+    key: "MODIFIED",
+    label: "Modifiee",
+    statuses: ["MODIFIEE"],
+    emptyMessage: "Aucune demande modifiee.",
+    cardClassName: "border-violet-200 bg-violet-50",
+    labelClassName: "text-violet-700",
+    valueClassName: "text-violet-900",
+  },
+  {
+    key: "COMPLETED",
+    label: "Essais realises",
+    statuses: ["RECEPTION_COMPLETE"],
+    emptyMessage: "Aucun essai realise pour le moment.",
+    cardClassName: "border-emerald-200 bg-emerald-50",
+    labelClassName: "text-emerald-700",
+    valueClassName: "text-emerald-900",
+  },
+  {
+    key: "CANCELLED",
+    label: "Annulee",
+    statuses: ["ANNULEE"],
+    emptyMessage: "Aucune demande annulee.",
+    cardClassName: "border-rose-200 bg-rose-50",
+    labelClassName: "text-rose-700",
+    valueClassName: "text-rose-900",
+  },
+];
+
 function getScope(locationPathname: string) {
   if (locationPathname.startsWith("/projet/")) {
     return {
@@ -25,6 +100,7 @@ export function OnlineTrialDashboardPage() {
   const location = useLocation();
   const scope = getScope(location.pathname);
   const [trials, setTrials] = useState<OnlineTrial[]>([]);
+  const [activeSection, setActiveSection] = useState<TrialSectionKey>("SCHEDULED");
   const [error, setError] = useState("");
 
   async function load() {
@@ -46,21 +122,36 @@ export function OnlineTrialDashboardPage() {
 
   useLiveAlerts(Boolean(token), load);
 
-  const metrics = useMemo(() => {
-    const total = trials.length;
-    const pending = trials.filter((item) => item.status === "EN_COURS_DE_TRAITEMENT").length;
-    const toUpdate = trials.filter((item) => item.status === "A_MODIFIER").length;
-    const completed = trials.filter((item) => item.status === "RECEPTION_COMPLETE").length;
-    return { total, pending, toUpdate, completed };
+  const sectionCounts = useMemo(() => {
+    const counts: Record<TrialSectionKey, number> = {
+      SCHEDULED: 0,
+      PENDING_PPM: 0,
+      TO_UPDATE: 0,
+      MODIFIED: 0,
+      COMPLETED: 0,
+      CANCELLED: 0,
+    };
+
+    for (const trial of trials) {
+      if (trial.status === "TRAITEE_PAR_PM") counts.SCHEDULED += 1;
+      if (trial.status === "EN_COURS_DE_TRAITEMENT") counts.PENDING_PPM += 1;
+      if (trial.status === "A_MODIFIER") counts.TO_UPDATE += 1;
+      if (trial.status === "MODIFIEE") counts.MODIFIED += 1;
+      if (trial.status === "RECEPTION_COMPLETE") counts.COMPLETED += 1;
+      if (trial.status === "ANNULEE") counts.CANCELLED += 1;
+    }
+
+    return counts;
   }, [trials]);
 
-  const actionableTrials = useMemo(
+  const activeConfig = TRIAL_SECTION_CONFIGS.find((item) => item.key === activeSection) ?? TRIAL_SECTION_CONFIGS[0];
+
+  const filteredTrials = useMemo(
     () =>
       trials
-        .filter((item) => item.status === "A_MODIFIER" || item.status === "TRAITEE_PAR_PM")
-        .sort((a, b) => new Date(b.updated_at ?? b.created_at).getTime() - new Date(a.updated_at ?? a.created_at).getTime())
-        .slice(0, 6),
-    [trials]
+        .filter((item) => activeConfig.statuses.includes(item.status))
+        .sort((a, b) => new Date(b.updated_at ?? b.created_at).getTime() - new Date(a.updated_at ?? a.created_at).getTime()),
+    [trials, activeConfig]
   );
 
   return (
@@ -74,23 +165,44 @@ export function OnlineTrialDashboardPage() {
           Espace dedie a la creation, au suivi et a la mise a jour des demandes d'essai en ligne.
         </p>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Total</p>
-            <p className="mt-2 text-3xl font-semibold text-slate-950">{metrics.total}</p>
-          </div>
-          <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-sky-700">En attente PPM</p>
-            <p className="mt-2 text-3xl font-semibold text-sky-900">{metrics.pending}</p>
-          </div>
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-amber-700">A modifier</p>
-            <p className="mt-2 text-3xl font-semibold text-amber-900">{metrics.toUpdate}</p>
-          </div>
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-emerald-700">Essais realises</p>
-            <p className="mt-2 text-3xl font-semibold text-emerald-900">{metrics.completed}</p>
-          </div>
+        <div className="mt-6 grid items-start gap-4 md:grid-cols-2 xl:grid-cols-6">
+          {TRIAL_SECTION_CONFIGS.map((section) => {
+            const count = sectionCounts[section.key];
+            const isActive = section.key === activeSection;
+            const isScheduledActiveAlert = section.key === "SCHEDULED" && count > 0;
+            const isToUpdateActiveAlert = section.key === "TO_UPDATE" && count > 0;
+            const isPriorityAlert = isScheduledActiveAlert || isToUpdateActiveAlert;
+            const scheduledNeutralClass =
+              section.key === "SCHEDULED" && count === 0 ? "border-amber-200 bg-amber-50" : "";
+            const scheduledBlinkClass = isScheduledActiveAlert ? "border-rose-300 bg-rose-50/80" : "";
+            const toUpdateBlinkClass = isToUpdateActiveAlert ? "border-amber-300 bg-amber-50/90" : "";
+            const alertMotionClass = isPriorityAlert ? "animate-pulse shadow-[0_16px_34px_-26px_rgba(15,23,42,0.55)]" : "";
+            const alertSizeClass = isPriorityAlert ? "origin-top scale-[1.08] p-6 md:p-7 min-h-[10.75rem]" : "min-h-[9.25rem]";
+            const activeRingClass = isActive ? "ring-2 ring-slate-300 ring-offset-1" : "";
+            const labelClassName =
+              section.key === "SCHEDULED" && count > 0 ? "text-rose-700" : section.labelClassName;
+            const valueClassName =
+              section.key === "SCHEDULED" && count > 0 ? "text-rose-900" : section.valueClassName;
+            const sectionClassName =
+              section.key === "SCHEDULED"
+                ? `${scheduledNeutralClass} ${scheduledBlinkClass}`.trim()
+                : section.key === "TO_UPDATE"
+                  ? `${section.cardClassName} ${toUpdateBlinkClass}`.trim()
+                  : section.cardClassName;
+
+            return (
+              <button
+                key={section.key}
+                type="button"
+                aria-pressed={isActive}
+                onClick={() => setActiveSection(section.key)}
+                className={`rounded-2xl border p-4 text-left transition-all duration-300 hover:-translate-y-0.5 hover:shadow-sm ${sectionClassName} ${alertMotionClass} ${alertSizeClass} ${activeRingClass}`}
+              >
+                <p className={`text-xs uppercase tracking-[0.18em] ${labelClassName}`}>{section.label}</p>
+                <p className={`mt-2 text-3xl font-semibold ${valueClassName}`}>{count}</p>
+              </button>
+            );
+          })}
         </div>
 
         <div className="mt-6 flex flex-wrap gap-3">
@@ -114,13 +226,13 @@ export function OnlineTrialDashboardPage() {
       </section>
 
       <section className="space-y-4">
-        <h3 className="text-lg font-semibold text-slate-900">Dossiers prioritaires</h3>
-        {actionableTrials.length > 0 ? (
-          actionableTrials.map((trial) => (
+        <h3 className="text-lg font-semibold text-slate-900">{activeConfig.label}</h3>
+        {filteredTrials.length > 0 ? (
+          filteredTrials.map((trial) => (
             <OnlineTrialDossierCard key={trial.id} trial={trial} to={`${scope.base}/${trial.id}`} />
           ))
         ) : (
-          <div className="panel p-6 text-sm text-slate-500">Aucun dossier prioritaire pour le moment.</div>
+          <div className="panel p-6 text-sm text-slate-500">{activeConfig.emptyMessage}</div>
         )}
       </section>
     </div>

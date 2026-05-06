@@ -21,6 +21,40 @@ function displayValue(value?: string | number | null) {
   return String(value);
 }
 
+function normalizeModeToken(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+}
+
+function isMixedNormalMode(value: string) {
+  const mode = normalizeModeToken(value);
+  return (
+    mode.includes("NORMAL") &&
+    mode.includes("FRET") &&
+    (mode.includes("VOYAGEUR") || mode.includes("VOY") || mode.includes("FRET OU V"))
+  );
+}
+
+function speedLabel(mode?: string | null, speed?: number | null) {
+  if (speed != null) {
+    return String(speed);
+  }
+
+  const modeValue = mode ?? "";
+  const normalizedMode = normalizeModeToken(modeValue);
+  if (isMixedNormalMode(modeValue)) {
+    return "Normal";
+  }
+  if (normalizedMode.includes("VOYAGEUR") || normalizedMode.includes("VOY")) {
+    return "Normal voyageur";
+  }
+  return "Normal fret";
+}
+
 export function getRequesterLabel(alert: Alert) {
   const fullName = alert.created_by.full_name?.trim() ?? "";
   if (!fullName) {
@@ -77,13 +111,7 @@ export function buildAlertDetailFields(alert: Alert): AlertField[] {
   const requestedDestination = getRequestedDestinationLabel(alert);
   const decidedDestination = getRetainedDestinationLabel(alert);
   const permanentDecisionReason = getPermanentDecisionReason(alert);
-
-  const displayedSpeed =
-    alert.transport_mode === "VOYAGEUR"
-      ? "Normal voyageur"
-      : alert.speed_kmh != null
-        ? String(alert.speed_kmh)
-        : "Normal fret";
+  const displayedSpeed = speedLabel(alert.transport_mode, alert.speed_kmh);
 
   const baseFields: AlertField[] = [
     { label: "Date de la demande", value: formatDateTime(alert.request_date ?? alert.created_at) },

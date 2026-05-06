@@ -46,8 +46,9 @@ type MaterialEntry = {
   materiel_concerne: string;
 };
 
-const DEFAULT_SPEED_VALUE = "";
-const DEFAULT_SPEED_OPTIONS = [
+const FIXED_SPEED_OPTIONS = [
+  { value: "160", label: "160" },
+  { value: "150", label: "150" },
   { value: "140", label: "140" },
   { value: "130", label: "130" },
   { value: "120", label: "120" },
@@ -64,6 +65,8 @@ const DEFAULT_SPEED_OPTIONS = [
   { value: "10", label: "10" },
   { value: "5", label: "5" },
 ] as const;
+
+const DEFAULT_SPEED_VALUE: string = FIXED_SPEED_OPTIONS[0].value;
 
 function normalizeAccompanimentSeverity(value: Severity): Severity {
   return value === "NIVEAU_1" ? "NIVEAU_1" : "NIVEAU_2";
@@ -82,7 +85,7 @@ const DEFAULT_FORM_CONFIG: AdminAlertFormConfig = {
     mode_acheminement: { required: false, options: ["US", "UM"] },
     etat_maintenance: { required: true, options: ["PFL", "PV"] },
     gravite: { required: true, options: ["NIVEAU_1", "NIVEAU_2"] },
-    vitesse: { required: false, options: DEFAULT_SPEED_OPTIONS.map((item) => item.value) },
+    vitesse: { required: true, options: FIXED_SPEED_OPTIONS.map((item) => item.value) },
     probleme: { required: true, options: [] },
     conditions_acheminement: { required: true, options: [] },
   },
@@ -134,7 +137,7 @@ export function OnlineTrialNewPage() {
     arrival_station_id: 0,
     parcours_aller: true,
     parcours_retour: true,
-    mode_acheminement: "" as TransportMode,
+    mode_acheminement: "US" as TransportMode,
     date_depart: toLocalInputDateTime(new Date().toISOString()),
     vitesse: DEFAULT_SPEED_VALUE,
     motif: "",
@@ -190,7 +193,8 @@ export function OnlineTrialNewPage() {
               ? toLocalInputDateTime(trialResult.request_date)
               : toLocalInputDateTime(new Date().toISOString()),
           vitesse:
-            trialResult.speed_kmh != null
+            trialResult.speed_kmh != null &&
+            FIXED_SPEED_OPTIONS.some((item) => item.value === String(trialResult.speed_kmh))
               ? String(trialResult.speed_kmh)
               : DEFAULT_SPEED_VALUE,
           motif: trialResult.problem_description,
@@ -207,11 +211,16 @@ export function OnlineTrialNewPage() {
   const configFields = formConfig.fields ?? {};
   const required = (fieldKey: string) => Boolean(configFields[fieldKey]?.required);
 
-  const modeOptions = [
-    { value: "" as TransportMode, label: "Choisir" },
-    { value: "US" as TransportMode, label: "US" },
-    { value: "UM" as TransportMode, label: "UM" },
-  ];
+  const hasMrMaterial = materialEntries.some(
+    (entry) => (entry.type_materiel || "").trim().toUpperCase() === "MR"
+  );
+
+  const modeOptions = hasMrMaterial
+    ? [{ value: "-" as TransportMode, label: "-" }]
+    : [
+        { value: "US" as TransportMode, label: "US" },
+        { value: "UM" as TransportMode, label: "UM" },
+      ];
 
   const exploitantOptions = (configFields.etat_maintenance?.options?.length
     ? configFields.etat_maintenance.options
@@ -236,30 +245,25 @@ export function OnlineTrialNewPage() {
     ? configFields.type_materiel.options
     : ["MM", "MR"]) as MaterialType[];
 
-  const vitesseConfigValues = (configFields.vitesse?.options?.length
-    ? configFields.vitesse.options
-    : DEFAULT_SPEED_OPTIONS.map((item) => item.value)
-  )
-    .map((item) => item.trim())
-    .filter((item) => /^\d+$/.test(item));
-
-  const currentModeSpeedOptions = [
-    { value: DEFAULT_SPEED_VALUE, label: "Normal" },
-    ...vitesseConfigValues.map((item) => ({ value: item, label: item })),
-  ].filter((item, index, array) => array.findIndex((other) => other.value === item.value) === index);
+  useEffect(() => {
+    setForm((prev) => {
+      const currentMode = (prev.mode_acheminement || "").trim().toUpperCase();
+      if (hasMrMaterial) {
+        return currentMode === "-" ? prev : { ...prev, mode_acheminement: "-" };
+      }
+      if (currentMode !== "US" && currentMode !== "UM") {
+        return { ...prev, mode_acheminement: "US" };
+      }
+      return prev.mode_acheminement === currentMode ? prev : { ...prev, mode_acheminement: currentMode };
+    });
+  }, [hasMrMaterial]);
 
   useEffect(() => {
-    if (!modeOptions.some((item) => item.value === form.mode_acheminement)) {
-      setForm((prev) => ({ ...prev, mode_acheminement: "" }));
-    }
-  }, [form.mode_acheminement]);
-
-  useEffect(() => {
-    const availableSpeeds = currentModeSpeedOptions.map((item) => item.value);
-    if (availableSpeeds.length > 0 && !availableSpeeds.includes(form.vitesse)) {
+    const availableSpeeds: string[] = FIXED_SPEED_OPTIONS.map((item) => item.value);
+    if (!availableSpeeds.includes(form.vitesse)) {
       setForm((prev) => ({ ...prev, vitesse: DEFAULT_SPEED_VALUE }));
     }
-  }, [form.vitesse, currentModeSpeedOptions]);
+  }, [form.vitesse]);
 
   function updateMaterialEntry(idValue: number, changes: Partial<MaterialEntry>) {
     setMaterialEntries((prev) => prev.map((entry) => (entry.id === idValue ? { ...entry, ...changes } : entry)));
@@ -306,6 +310,8 @@ export function OnlineTrialNewPage() {
           const finalSeries = materialEntries.map((entry) => (entry.serie === "AUTRE" ? entry.customSerie.trim() : entry.serie));
           const finalMaterialTypes = materialEntries.map((entry) => entry.type_materiel.trim()).filter(Boolean);
           const finalConcernedMaterials = materialEntries.map((entry) => entry.materiel_concerne.trim());
+          const hasMrInPayload = finalMaterialTypes.some((value) => value.toUpperCase() === "MR");
+          const normalizedMode = hasMrInPayload ? "-" : (form.mode_acheminement || "").trim().toUpperCase();
 
           if (required("serie") && finalSeries.some((value) => !value)) {
             setError("Veuillez renseigner chaque serie.");
@@ -339,6 +345,14 @@ export function OnlineTrialNewPage() {
             setError("Veuillez renseigner le materiel concerne.");
             return;
           }
+          if (!hasMrInPayload && normalizedMode !== "US" && normalizedMode !== "UM") {
+            setError("Le mode d'essai doit etre US ou UM pour un materiel MM.");
+            return;
+          }
+          if (!FIXED_SPEED_OPTIONS.some((item) => item.value === form.vitesse)) {
+            setError("Veuillez choisir une vitesse valide.");
+            return;
+          }
 
           try {
             setSaving(true);
@@ -352,11 +366,8 @@ export function OnlineTrialNewPage() {
               identifiant_materiel: finalSeries.join(" + "),
               materiel_concerne: finalConcernedMaterials.join(" + "),
               date_depart: form.date_depart ? new Date(form.date_depart).toISOString() : null,
-              vitesse:
-                form.vitesse
-                  ? Number(form.vitesse)
-                  : null,
-              mode_acheminement: form.mode_acheminement,
+              vitesse: Number(form.vitesse),
+              mode_acheminement: normalizedMode,
               probleme: form.motif,
               etat_maintenance: form.exp,
               gravite: normalizeAccompanimentSeverity(form.gravite),
@@ -376,7 +387,7 @@ export function OnlineTrialNewPage() {
               payload.append("identifiant_materiel", payloadData.identifiant_materiel);
               payload.append("materiel_concerne", payloadData.materiel_concerne);
               if (payloadData.date_depart) payload.append("date_depart", payloadData.date_depart);
-              if (payloadData.vitesse != null) payload.append("vitesse", String(payloadData.vitesse));
+              payload.append("vitesse", String(payloadData.vitesse));
               payload.append("mode_acheminement", payloadData.mode_acheminement);
               payload.append("probleme", payloadData.probleme);
               payload.append("etat_maintenance", payloadData.etat_maintenance);
@@ -539,30 +550,22 @@ export function OnlineTrialNewPage() {
 
                     <label className="space-y-2">
                       <span className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Materiel concerne</span>
+                      <input
+                        className="input bg-white"
+                        type="text"
+                        list={materielConcerneOptions.length > 0 ? `materiel-concerne-options-${entry.id}` : undefined}
+                        placeholder={`Materiel concerne ${index + 1}`}
+                        value={entry.materiel_concerne}
+                        onChange={(e) => updateMaterialEntry(entry.id, { materiel_concerne: e.target.value })}
+                        required={required("materiel_concerne")}
+                      />
                       {materielConcerneOptions.length > 0 ? (
-                        <select
-                          className="input bg-white"
-                          value={entry.materiel_concerne}
-                          onChange={(e) => updateMaterialEntry(entry.id, { materiel_concerne: e.target.value })}
-                          required={required("materiel_concerne")}
-                        >
-                          <option value="">Choisir</option>
+                        <datalist id={`materiel-concerne-options-${entry.id}`}>
                           {materielConcerneOptions.map((option) => (
-                            <option key={`${entry.id}-${option}`} value={option}>
-                              {option}
-                            </option>
+                            <option key={`${entry.id}-${option}`} value={option} />
                           ))}
-                        </select>
-                      ) : (
-                        <input
-                          className="input bg-white"
-                          type="text"
-                          placeholder={`Materiel concerne ${index + 1}`}
-                          value={entry.materiel_concerne}
-                          onChange={(e) => updateMaterialEntry(entry.id, { materiel_concerne: e.target.value })}
-                          required={required("materiel_concerne")}
-                        />
-                      )}
+                        </datalist>
+                      ) : null}
                     </label>
 
                     {isRameMode && materialEntries.length > 1 ? (
@@ -612,6 +615,7 @@ export function OnlineTrialNewPage() {
                       const nextMode = e.target.value as TransportMode;
                       setForm((prev) => ({ ...prev, mode_acheminement: nextMode }));
                     }}
+                    disabled={hasMrMaterial}
                   >
                     {modeOptions.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -659,9 +663,9 @@ export function OnlineTrialNewPage() {
                     className="input bg-white"
                     value={form.vitesse}
                     onChange={(e) => setForm((prev) => ({ ...prev, vitesse: e.target.value }))}
-                    required={required("vitesse")}
+                    required
                   >
-                    {currentModeSpeedOptions.map((speedOption) => (
+                    {FIXED_SPEED_OPTIONS.map((speedOption) => (
                       <option key={speedOption.value} value={speedOption.value}>
                         {speedOption.label}
                       </option>

@@ -10,6 +10,7 @@ export type OnlineTrialMaterialRow = {
 
 export type OnlineTrialProgressEntry = {
   performed?: boolean;
+  result?: "CONCLUANT" | "NON_CONCLUANT" | null;
   realization_date?: string | null;
   departure_date?: string | null;
   return_date?: string | null;
@@ -63,6 +64,8 @@ export function parseOnlineTrialProgress(value?: string | null): Record<number, 
       continue;
     }
     const typed = item as Record<string, unknown>;
+    const normalizedResult =
+      typed.result === "CONCLUANT" || typed.result === "NON_CONCLUANT" ? typed.result : null;
     const realizationDate =
       typeof typed.realization_date === "string"
         ? typed.realization_date
@@ -73,6 +76,7 @@ export function parseOnlineTrialProgress(value?: string | null): Record<number, 
             : null;
     parsed[index] = {
       performed: typeof typed.performed === "boolean" ? typed.performed : false,
+      result: normalizedResult,
       realization_date: realizationDate,
       departure_date: typeof typed.departure_date === "string" ? typed.departure_date : null,
       return_date: typeof typed.return_date === "string" ? typed.return_date : null,

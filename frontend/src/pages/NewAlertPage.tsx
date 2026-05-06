@@ -64,27 +64,29 @@ const accompanimentOptions = [
 ];
 
 const DEFAULT_FRET_SPEED_VALUE = "NORMAL_FRET";
-const DEFAULT_FRET_SPEED_LABEL = "Normal fret";
+const DEFAULT_FRET_SPEED_LABEL = "Normal Fret";
 const DEFAULT_VOYAGEUR_SPEED_VALUE = "NORMAL_VOYAGEUR";
-const DEFAULT_VOYAGEUR_SPEED_LABEL = "Normal voyageur";
-const DEFAULT_MIXED_SPEED_VALUE = "NORMALE";
-const DEFAULT_MIXED_SPEED_LABEL = "NORMALE";
-const DEFAULT_SPEED_OPTIONS = [
-  { value: "140", label: "140" },
-  { value: "130", label: "130" },
-  { value: "120", label: "120" },
-  { value: "110", label: "110" },
-  { value: "100", label: "100" },
-  { value: "90", label: "90" },
-  { value: "80", label: "80" },
-  { value: "70", label: "70" },
-  { value: "60", label: "60" },
-  { value: "50", label: "50" },
-  { value: "40", label: "40" },
-  { value: "30", label: "30" },
-  { value: "20", label: "20" },
-  { value: "10", label: "10" },
-  { value: "5", label: "5" },
+const DEFAULT_VOYAGEUR_SPEED_LABEL = "Normal Voyageur";
+const DEFAULT_MIXED_SPEED_VALUE = "NORMAL";
+const DEFAULT_MIXED_SPEED_LABEL = "Normal";
+const FREIGHT_SPEED_VALUES = ["70", "60", "50", "40", "30", "20", "10", "5"] as const;
+const VOYAGEUR_SPEED_VALUES = [
+  "150",
+  "140",
+  "130",
+  "120",
+  "110",
+  "100",
+  "90",
+  "80",
+  "70",
+  "60",
+  "50",
+  "40",
+  "30",
+  "20",
+  "10",
+  "5",
 ] as const;
 
 function normalizeAccompanimentSeverity(value: Severity): Severity {
@@ -123,7 +125,7 @@ function getDefaultSpeedValueForMode(mode: string) {
   if (isMixedNormalMode(normalizedMode)) {
     return DEFAULT_MIXED_SPEED_VALUE;
   }
-  if (normalizedMode === "VOYAGEUR") {
+  if (normalizedMode.includes("VOYAGEUR") || normalizedMode.includes("VOY")) {
     return DEFAULT_VOYAGEUR_SPEED_VALUE;
   }
   return DEFAULT_FRET_SPEED_VALUE;
@@ -140,7 +142,7 @@ const DEFAULT_FORM_CONFIG: AdminAlertFormConfig = {
     type_acheminement: { required: true, options: ["HLP", "VHL"] },
     etat_maintenance: { required: true, options: ["PFL", "PV"] },
     gravite: { required: true, options: ["NIVEAU_1", "NIVEAU_2"] },
-    vitesse: { required: false, options: DEFAULT_SPEED_OPTIONS.map((item) => item.value) },
+    vitesse: { required: false, options: [...VOYAGEUR_SPEED_VALUES] },
     probleme: { required: true, options: [] },
     conditions_acheminement: { required: true, options: [] },
   },
@@ -277,28 +279,23 @@ export function NewAlertPage() {
     ? configFields.type_materiel.options
     : ["MM", "MR"]) as MaterialType[];
 
-  const vitesseConfigValues = (configFields.vitesse?.options?.length
-    ? configFields.vitesse.options
-    : DEFAULT_SPEED_OPTIONS.map((item) => item.value)
-  )
-    .map((item) => item.trim())
-    .filter((item) => /^\d+$/.test(item));
   const freightSpeedOptions = [
     { value: DEFAULT_FRET_SPEED_VALUE, label: DEFAULT_FRET_SPEED_LABEL },
-    ...vitesseConfigValues.map((item) => ({ value: item, label: item })),
-  ].filter((item, index, array) => array.findIndex((other) => other.value === item.value) === index);
+    ...FREIGHT_SPEED_VALUES.map((item) => ({ value: item, label: item })),
+  ];
   const voyageurSpeedOptions = [
     { value: DEFAULT_VOYAGEUR_SPEED_VALUE, label: DEFAULT_VOYAGEUR_SPEED_LABEL },
-    ...vitesseConfigValues.map((item) => ({ value: item, label: item })),
-  ].filter((item, index, array) => array.findIndex((other) => other.value === item.value) === index);
+    ...VOYAGEUR_SPEED_VALUES.map((item) => ({ value: item, label: item })),
+  ];
   const mixedNormalSpeedOptions = [
     { value: DEFAULT_MIXED_SPEED_VALUE, label: DEFAULT_MIXED_SPEED_LABEL },
-    ...DEFAULT_SPEED_OPTIONS.map((item) => ({ value: item.value, label: item.label })),
-  ].filter((item, index, array) => array.findIndex((other) => other.value === item.value) === index);
+  ];
+  const normalizedMode = normalizeModeToken(form.mode_acheminement);
+  const isVoyageurMode = normalizedMode.includes("VOYAGEUR") || normalizedMode.includes("VOY");
 
   const currentModeSpeedOptions = isMixedNormalMode(form.mode_acheminement)
     ? mixedNormalSpeedOptions
-    : form.mode_acheminement === "VOYAGEUR"
+    : isVoyageurMode
       ? voyageurSpeedOptions
       : freightSpeedOptions;
 

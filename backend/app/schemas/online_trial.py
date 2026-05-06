@@ -1,19 +1,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
 from app.models.enums import AlertStatus, MaintenanceState, Severity
 from app.schemas.auth import UserSummary
 from app.schemas.common import StationRead
-
-
-class OnlineTrialMaterialReasonUpdate(BaseModel):
-    index: int = Field(ge=0)
-    motif_pm: Optional[str] = None
-
 
 class OnlineTrialCreate(BaseModel):
     departure_station_id: int
@@ -51,15 +45,13 @@ class OnlineTrialUpdate(BaseModel):
 
 class OnlineTrialDecisionCreate(BaseModel):
     commentaire: Optional[str] = None
-    accepted_material_indexes: list[int] = Field(default_factory=list)
-    canceled_material_indexes: list[int] = Field(default_factory=list)
-    material_reason_updates: list[OnlineTrialMaterialReasonUpdate] = Field(default_factory=list)
     decision: str = Field(pattern="^(CONFIRMER|ANNULER|MODIFIER)$")
 
 
 class OnlineTrialProgressMaterialUpdate(BaseModel):
     index: int = Field(ge=0)
     performed: bool = False
+    result: Optional[Literal["CONCLUANT", "NON_CONCLUANT"]] = None
     realization_date: Optional[datetime] = None
     departure_date: Optional[datetime] = None
     return_date: Optional[datetime] = None

@@ -106,8 +106,8 @@ export function PermanentMapPage() {
       <section className="panel overflow-hidden p-6">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-xl font-semibold text-slate-950">Carte du Maroc des demandes actives</h2>
-            <p className="mt-2 text-sm text-slate-500">La page met la carte au premier plan. Cliquez sur un point rouge actif pour ouvrir directement la fiche detail de la demande.</p>
+            <h2 className="text-xl font-semibold text-slate-950">Répartition des demandes d'acheminements sur la carte nationale</h2>
+            <p className="mt-2 text-sm text-slate-500">La gare indiquée en rouge représente l'endroit où la demande d'acheminement a été créée.</p>
           </div>
           <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
             <p>{stationSummaries.length} gare(s) geolocalisee(s)</p>
@@ -116,7 +116,15 @@ export function PermanentMapPage() {
         </div>
 
         <div className="overflow-hidden rounded-[2rem] border border-slate-200">
-          <MapContainer center={MOROCCO_CENTER} zoom={6} minZoom={5} maxZoom={11} maxBounds={MOROCCO_BOUNDS} scrollWheelZoom className="h-[76vh] w-full">
+          <MapContainer
+            center={MOROCCO_CENTER}
+            zoom={6}
+            minZoom={5}
+            maxZoom={11}
+            maxBounds={MOROCCO_BOUNDS}
+            scrollWheelZoom
+            className="h-[70vh] md:h-[80vh] xl:h-[86vh] w-full"
+          >
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

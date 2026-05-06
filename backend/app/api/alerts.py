@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import json
 import math
 from typing import Optional
+import unicodedata
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy import func, or_, select
@@ -58,6 +59,40 @@ from app.services.realtime import manager
 from app.services.storage import save_upload
 
 router = APIRouter(tags=["alerts"])
+
+FREIGHT_ALLOWED_SPEEDS = {70, 60, 50, 40, 30, 20, 10, 5}
+VOYAGEUR_ALLOWED_SPEEDS = {150, 140, 130, 120, 110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 5}
+MIXED_NORMAL_ALLOWED_SPEEDS: set[int] = set()
+
+
+def _normalize_mode_token(value: Optional[str]) -> str:
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+
+    normalized = unicodedata.normalize("NFD", raw)
+    without_accents = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
+    return " ".join(without_accents.upper().split())
+
+
+def _is_mixed_normal_mode(value: str) -> bool:
+    mode = _normalize_mode_token(value)
+    return (
+        "NORMAL" in mode
+        and "FRET" in mode
+        and ("VOYAGEUR" in mode or "VOY" in mode or "FRET OU V" in mode)
+    )
+
+
+def _allowed_speeds_for_mode(mode_acheminement: str) -> set[int]:
+    mode = _normalize_mode_token(mode_acheminement)
+    if _is_mixed_normal_mode(mode):
+        return MIXED_NORMAL_ALLOWED_SPEEDS
+    if "VOYAGEUR" in mode or "VOY" in mode:
+        return VOYAGEUR_ALLOWED_SPEEDS
+    if "FRET" in mode:
+        return FREIGHT_ALLOWED_SPEEDS
+    return VOYAGEUR_ALLOWED_SPEEDS | FREIGHT_ALLOWED_SPEEDS
 
 
 def _field_is_required(config: dict[str, dict], field_name: str) -> bool:
@@ -129,8 +164,6 @@ def _validate_alert_form_rules(
     _validate_required_text(config, "materiel_concerne", materiel_concerne, "Materiel concerne")
     _validate_required_text(config, "probleme", probleme, "Motif")
     _validate_required_text(config, "conditions_acheminement", conditions_acheminement, "Autres conditions")
-    if mode_acheminement == "FRET":
-        _validate_required_value(config, "vitesse", vitesse, "Vitesse")
 
     _validate_option(config, "mode_acheminement", mode_acheminement, "Mode d'acheminement")
     _validate_option(config, "type_acheminement", type_acheminement, "Type d'acheminement")
@@ -141,8 +174,8 @@ def _validate_alert_form_rules(
     _validate_joined_options(config, "serie", identifiant_materiel, "Serie")
     _validate_joined_options(config, "materiel_concerne", materiel_concerne, "Materiel concerne")
 
-    allowed_speeds = _field_allowed_options(config, "vitesse")
-    if vitesse is not None and allowed_speeds and str(vitesse) not in allowed_speeds:
+    allowed_speeds = _allowed_speeds_for_mode(mode_acheminement)
+    if vitesse is not None and vitesse not in allowed_speeds:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Valeur non autorisee pour Vitesse")
 
 

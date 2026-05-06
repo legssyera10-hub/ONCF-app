@@ -6,6 +6,7 @@ from html import escape
 import json
 from smtplib import SMTP, SMTPException
 from typing import Callable, Iterable, Optional
+import unicodedata
 
 from sqlalchemy.orm import Session
 
@@ -117,6 +118,34 @@ def _accompagnement_label(alert: Alert) -> str:
 def _exploitant_label(alert: Alert) -> str:
     value = _display_text(alert.maintenance_state)
     return value if value in {"PFL", "PV"} else value
+
+
+def _normalize_mode_token(value: str) -> str:
+    normalized = unicodedata.normalize("NFD", value)
+    without_accents = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
+    return " ".join(without_accents.upper().split())
+
+
+def _is_mixed_normal_mode(mode: str) -> bool:
+    token = _normalize_mode_token(mode)
+    return (
+        "NORMAL" in token
+        and "FRET" in token
+        and ("VOYAGEUR" in token or "VOY" in token or "FRET OU V" in token)
+    )
+
+
+def _speed_label(alert: Alert, *, with_unit: bool = False) -> str:
+    if alert.speed_kmh is not None:
+        return f"{alert.speed_kmh} km/h" if with_unit else str(alert.speed_kmh)
+
+    mode = _display_text(alert.transport_mode)
+    token = _normalize_mode_token(mode)
+    if _is_mixed_normal_mode(mode):
+        return "Normal"
+    if "VOYAGEUR" in token or "VOY" in token:
+        return "Normal voyageur"
+    return "Normal fret"
 
 
 def _autres_label(alert: Alert) -> str:
@@ -319,12 +348,7 @@ def _render_html_mail(
 
 def _build_summary_pairs(alert: Alert, state_label: str) -> list[tuple[str, str]]:
     request_date = alert.request_date or alert.created_at
-    if _display_text(alert.transport_mode) == "VOYAGEUR":
-        speed_label = "Normal voyageur"
-    elif alert.speed_kmh is not None:
-        speed_label = f"{alert.speed_kmh} km/h"
-    else:
-        speed_label = "Normal fret"
+    speed_label = _speed_label(alert, with_unit=True)
     return [
         ("Dossier", _dossier_label(alert)),
         ("Demandeur", _demandeur_code(alert)),

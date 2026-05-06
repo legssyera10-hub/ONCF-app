@@ -1,5 +1,7 @@
-import { useEffect, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { api } from "../api/client";
+import { useLiveAlerts } from "../hooks/useLiveAlerts";
 import { useAuth } from "../hooks/useAuth";
 import { preloadRoute } from "../routes/lazyRoutes";
 import { PageBreadcrumbs } from "../components/PageBreadcrumbs";
@@ -59,7 +61,7 @@ function getNavigation(role?: string, pathname?: string): NavigationItem[] {
       ];
     case "PERMANENT":
       return [
-        { to: "/permanent/dashboard", label: "Dashboard" },
+        { to: "/permanent/dashboard", label: "Acheminement" },
         { to: "/permanent/map", label: "Carte Maroc" },
         { to: "/permanent/essais", label: "Essais en ligne" },
       ];
@@ -191,9 +193,11 @@ function getHeroTitle(role?: string, pathname?: string) {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { user, logout } = useAuth();
+  const { user, token, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const [pendingTransportDecisionCount, setPendingTransportDecisionCount] = useState(0);
+  const [pendingTrialDecisionCount, setPendingTrialDecisionCount] = useState(0);
   const navigation = getNavigation(user?.role, location.pathname);
   const heroTitle = getHeroTitle(user?.role, location.pathname);
   const heroConfig = roleBackgrounds[user?.role ?? ""] ?? defaultDashboardHero;
@@ -217,6 +221,28 @@ export function AppShell({ children }: { children: ReactNode }) {
     location.pathname === "/technicentre/acheminements" ||
     location.pathname === "/establishment/dashboard" ||
     location.pathname === "/projet/essais/dashboard";
+
+  const refreshPermanentNotificationBadges = useCallback(() => {
+    if (!token || user?.role !== "PERMANENT") {
+      setPendingTransportDecisionCount(0);
+      setPendingTrialDecisionCount(0);
+      return;
+    }
+    Promise.all([api.alerts(token), api.onlineTrials(token)])
+      .then(([alerts, trials]) => {
+        const pendingTransportCount = alerts.filter((item) => item.status === "EN_COURS_DE_TRAITEMENT").length;
+        const pendingCount = trials.filter((item) => item.status === "EN_COURS_DE_TRAITEMENT").length;
+        setPendingTransportDecisionCount(pendingTransportCount);
+        setPendingTrialDecisionCount(pendingCount);
+      })
+      .catch(() => undefined);
+  }, [token, user?.role]);
+
+  useEffect(() => {
+    refreshPermanentNotificationBadges();
+  }, [refreshPermanentNotificationBadges]);
+
+  useLiveAlerts(Boolean(token && user?.role === "PERMANENT"), refreshPermanentNotificationBadges);
 
   useEffect(() => {
     if (!user?.role) {
@@ -342,35 +368,58 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <div
                   className={`nav-pill-row ${user?.role === "ADMIN" || isTechnicentreRole ? "xl:justify-end" : ""}`}
                 >
-                  {navigation.map((item) => (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      onMouseEnter={() => handlePreload(item.to)}
-                      onFocus={() => handlePreload(item.to)}
-                      className={({ isActive }) => {
-                        const forceActiveHome = isTechnicentreRole && item.icon === "home";
-                        return `nav-pill ${item.icon ? "nav-pill-with-icon" : ""} ${isActive || forceActiveHome ? "nav-pill-active" : "nav-pill-idle"}`;
-                      }}
-                    >
-                      {item.icon === "home" ? (
-                        <svg
-                          aria-hidden="true"
-                          viewBox="0 0 24 24"
-                          className="h-4 w-4"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M3 11.5 12 4l9 7.5" />
-                          <path d="M5 10.5V20h14v-9.5" />
-                        </svg>
-                      ) : null}
-                      <span>{item.label}</span>
-                    </NavLink>
-                  ))}
+                  {navigation.map((item) => {
+                    const isPermanentNavItem = user?.role === "PERMANENT" && !item.icon;
+                    const isPermanentEssaisButton = user?.role === "PERMANENT" && item.to === "/permanent/essais";
+                    const showTransportBadge =
+                      user?.role === "PERMANENT" &&
+                      item.to === "/permanent/dashboard" &&
+                      pendingTransportDecisionCount > 0;
+                    const transportBadgeLabel =
+                      pendingTransportDecisionCount > 99 ? "99+" : String(pendingTransportDecisionCount);
+                    const showTrialBadge =
+                      user?.role === "PERMANENT" &&
+                      item.to === "/permanent/essais" &&
+                      pendingTrialDecisionCount > 0;
+                    const trialBadgeLabel =
+                      pendingTrialDecisionCount > 99 ? "99+" : String(pendingTrialDecisionCount);
+                    const badgeLabel = showTransportBadge ? transportBadgeLabel : showTrialBadge ? trialBadgeLabel : null;
+
+                    return (
+                      <NavLink
+                        key={item.to}
+                        to={item.to}
+                        onMouseEnter={() => handlePreload(item.to)}
+                        onFocus={() => handlePreload(item.to)}
+                        className={({ isActive }) => {
+                          const forceActiveHome = isTechnicentreRole && item.icon === "home";
+                          return `nav-pill ${item.icon ? "nav-pill-with-icon" : ""} ${isPermanentNavItem ? "nav-pill-permanent" : ""} ${isPermanentEssaisButton ? "nav-pill-module-break" : ""} ${badgeLabel ? "relative" : ""} ${isActive || forceActiveHome ? "nav-pill-active" : "nav-pill-idle"}`;
+                        }}
+                      >
+                        {item.icon === "home" ? (
+                          <svg
+                            aria-hidden="true"
+                            viewBox="0 0 24 24"
+                            className="h-4 w-4"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M3 11.5 12 4l9 7.5" />
+                            <path d="M5 10.5V20h14v-9.5" />
+                          </svg>
+                        ) : null}
+                        <span>{item.label}</span>
+                        {badgeLabel ? (
+                          <span className="pointer-events-none absolute -right-1 -top-1 z-30 inline-flex min-h-[1.35rem] min-w-[1.35rem] items-center justify-center rounded-full border-2 border-white bg-red-600 px-1 text-[0.67rem] font-bold leading-none text-white shadow-[0_10px_20px_-12px_rgba(220,38,38,1)]">
+                            {badgeLabel}
+                          </span>
+                        ) : null}
+                      </NavLink>
+                    );
+                  })}
                 </div>
               ) : null}
             </div>

@@ -105,13 +105,14 @@ export function PermanentDashboard() {
   const cancellationCount = alerts.filter((item) => isCancelledStatus(item.status)).length;
   const aModifierCount = alerts.filter((item) => isModificationStatus(item.status)).length;
   const modifieeCount = alerts.filter((item) => item.status === "MODIFIEE").length;
+  const completedCount = alerts.filter((item) => item.status === "RECEPTION_COMPLETE").length;
 
   return (
     <div className="space-y-6">
       <section className="panel p-6">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Permanent PPM</p>
-          <h2 className="mt-3 text-4xl font-semibold tracking-tight text-slate-950">Liste des demandes d'acheminements</h2>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Permanent PPM - Acheminements</p>
+          <h2 className="mt-3 text-4xl font-semibold tracking-tight text-slate-950">Pilotage des demandes d'acheminements</h2>
         </div>
 
         <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(240px,300px)_minmax(0,1fr)]">
@@ -128,7 +129,7 @@ export function PermanentDashboard() {
           </div>
 
           <div className="rounded-[1.2rem] bg-white p-4 shadow-sm">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
                 <p className="text-xs uppercase tracking-[0.18em] text-emerald-700">Acceptee</p>
                 <p className="mt-2 text-2xl font-semibold text-emerald-800">{acceptedCount}</p>
@@ -144,6 +145,10 @@ export function PermanentDashboard() {
               <div className="rounded-xl border border-fuchsia-200 bg-fuchsia-50 p-3">
                 <p className="text-xs uppercase tracking-[0.18em] text-fuchsia-700">Modifiee</p>
                 <p className="mt-2 text-2xl font-semibold text-fuchsia-800">{modifieeCount}</p>
+              </div>
+              <div className="rounded-xl border border-teal-200 bg-teal-50 p-3">
+                <p className="text-xs uppercase tracking-[0.18em] text-teal-700">Acheminements realises</p>
+                <p className="mt-2 text-2xl font-semibold text-teal-800">{completedCount}</p>
               </div>
             </div>
           </div>

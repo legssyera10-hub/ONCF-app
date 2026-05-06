@@ -27,6 +27,7 @@ export function TechnicentreHomePage() {
   const [receptionCount, setReceptionCount] = useState(0);
   const [modificationCount, setModificationCount] = useState(0);
   const [trialModificationCount, setTrialModificationCount] = useState(0);
+  const [trialScheduledCount, setTrialScheduledCount] = useState(0);
 
   useEffect(() => {
     if (!token) return;
@@ -58,6 +59,7 @@ export function TechnicentreHomePage() {
 
         setModificationCount(actionableModificationCount);
         setTrialModificationCount(trials.filter((item) => item.status === "A_MODIFIER").length);
+        setTrialScheduledCount(trials.filter((item) => item.status === "TRAITEE_PAR_PM").length);
       })
       .catch(() => undefined);
   }, [token]);
@@ -65,9 +67,9 @@ export function TechnicentreHomePage() {
   const sectionCount = useMemo(
     () => ({
       acheminements: receptionCount + modificationCount,
-      essais: trialModificationCount,
+      essais: trialModificationCount + trialScheduledCount,
     }),
-    [receptionCount, modificationCount, trialModificationCount]
+    [receptionCount, modificationCount, trialModificationCount, trialScheduledCount]
   );
 
   return (
@@ -75,11 +77,28 @@ export function TechnicentreHomePage() {
       <div className="grid w-full gap-6 lg:grid-cols-2">
         {sections.map((section) => {
           const activeCount = sectionCount[section.key];
+          const acheminementNotifications = [
+            modificationCount > 0
+              ? `${modificationCount} demande${modificationCount > 1 ? "s" : ""} d'acheminement a modifier`
+              : null,
+            receptionCount > 0
+              ? `${receptionCount} reception${receptionCount > 1 ? "s" : ""} programmee${receptionCount > 1 ? "s" : ""}`
+              : null,
+          ].filter((item): item is string => Boolean(item));
+          const trialNotifications = [
+            trialModificationCount > 0
+              ? `${trialModificationCount} demande${trialModificationCount > 1 ? "s" : ""} d'essai a modifier`
+              : null,
+            trialScheduledCount > 0
+              ? `${trialScheduledCount} realisation${trialScheduledCount > 1 ? "s" : ""} d'essai programmee${
+                  trialScheduledCount > 1 ? "s" : ""
+                }`
+              : null,
+          ].filter((item): item is string => Boolean(item));
+          const sectionNotifications = section.key === "acheminements" ? acheminementNotifications : trialNotifications;
           const badge =
             activeCount > 0
-              ? section.key === "acheminements"
-                ? `${activeCount} action${activeCount > 1 ? "s" : ""} sur acheminements`
-                : `${activeCount} demande${activeCount > 1 ? "s" : ""} d'essai a revoir`
+              ? sectionNotifications[0] ?? "Aucun signalement"
               : section.key === "acheminements"
                 ? "Aucune action en attente"
                 : "Aucun signalement";
@@ -98,15 +117,28 @@ export function TechnicentreHomePage() {
                 </div>
                 <h2 className="mt-6 text-4xl font-semibold tracking-tight text-slate-950">{section.title}</h2>
                 <p className="mt-4 max-w-xl text-sm leading-7 text-slate-600">{section.description}</p>
-                <div
-                  className={`mt-6 inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${
-                    activeCount > 0
-                      ? "home-alert-pill border-rose-200 bg-rose-50 text-rose-700"
-                      : "border-slate-200 bg-white text-slate-600"
-                  }`}
-                >
-                  {badge}
-                </div>
+                {sectionNotifications.length > 0 ? (
+                  <div className="mt-6 space-y-2">
+                    {sectionNotifications.map((line) => (
+                      <div
+                        key={line}
+                        className="home-alert-pill inline-flex rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700"
+                      >
+                        {line}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div
+                    className={`mt-6 inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${
+                      activeCount > 0
+                        ? "home-alert-pill border-rose-200 bg-rose-50 text-rose-700"
+                        : "border-slate-200 bg-white text-slate-600"
+                    }`}
+                  >
+                    {badge}
+                  </div>
+                )}
               </div>
 
               <div className="mt-10 flex items-center justify-between rounded-[1.6rem] border border-slate-200 bg-slate-50 px-5 py-4">

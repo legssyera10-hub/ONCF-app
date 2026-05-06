@@ -31,6 +31,26 @@ from app.services.storage import save_upload
 
 router = APIRouter(prefix="/online-trials", tags=["online_trials"])
 
+ONLINE_TRIAL_ALLOWED_SPEEDS = {
+    160,
+    150,
+    140,
+    130,
+    120,
+    110,
+    100,
+    90,
+    80,
+    70,
+    60,
+    50,
+    40,
+    30,
+    20,
+    10,
+    5,
+}
+
 
 def _field_is_required(config: dict[str, dict], field_name: str) -> bool:
     field = config.get(field_name, {})
@@ -69,10 +89,10 @@ def _normalize_online_trial_mode(value: Optional[str]) -> str:
 
 def _validate_online_trial_mode(value: Optional[str]) -> None:
     normalized = _normalize_online_trial_mode(value)
-    if normalized and normalized not in {"US", "UM"}:
+    if normalized and normalized not in {"US", "UM", "-"}:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Mode d'essai invalide (valeurs autorisees: US, UM)",
+            detail="Mode d'essai invalide (valeurs autorisees: US, UM, -)",
         )
 
 
@@ -122,6 +142,20 @@ def _validate_online_trial_form_rules(
     _validate_required_text(config, "conditions_acheminement", conditions_acheminement, "Autres conditions")
     _validate_online_trial_directions(parcours_aller, parcours_retour)
     _validate_online_trial_mode(mode_acheminement)
+    has_mr = _contains_mr_material(type_materiel)
+    normalized_mode = _normalize_online_trial_mode(mode_acheminement)
+    if has_mr:
+        if normalized_mode != "-":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Le mode d'essai doit etre '-' si un materiel MR est present",
+            )
+    else:
+        if normalized_mode not in {"US", "UM"}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Le mode d'essai est obligatoire et doit etre US ou UM",
+            )
 
     _validate_option(config, "etat_maintenance", etat_maintenance, "Exploitant")
     _validate_option(config, "gravite", gravite, "Accompagnement")
@@ -129,13 +163,18 @@ def _validate_online_trial_form_rules(
     _validate_joined_options(config, "serie", identifiant_materiel, "Serie")
     _validate_joined_options(config, "materiel_concerne", materiel_concerne, "Materiel concerne")
 
-    allowed_speeds = _field_allowed_options(config, "vitesse")
-    if vitesse is not None and allowed_speeds and str(vitesse) not in allowed_speeds:
+    if vitesse is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Le champ Vitesse est obligatoire")
+    if vitesse not in ONLINE_TRIAL_ALLOWED_SPEEDS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Valeur non autorisee pour Vitesse")
 
 
 def _split_joined_values(value: Optional[str]) -> list[str]:
     return [item.strip() for item in (value or "").split(" + ") if item.strip()]
+
+
+def _contains_mr_material(type_materiel: str) -> bool:
+    return any(item.upper() == "MR" for item in _split_joined_values(type_materiel))
 
 
 def _online_trial_material_count(trial: OnlineTrialRequest) -> int:
@@ -297,6 +336,8 @@ async def create_online_trial(
     ),
 ) -> OnlineTrialRequest:
     mode_essai = _normalize_online_trial_mode(mode_acheminement)
+    if _contains_mr_material(type_materiel):
+        mode_essai = "-"
     ensure_station_exists(db, departure_station_id)
     ensure_station_exists(db, arrival_station_id)
     _validate_online_trial_form_rules(
@@ -418,6 +459,9 @@ async def update_online_trial(
 
     ensure_station_exists(db, payload.departure_station_id)
     ensure_station_exists(db, payload.arrival_station_id)
+    mode_for_validation = _normalize_online_trial_mode(payload.mode_acheminement)
+    if _contains_mr_material(payload.type_materiel):
+        mode_for_validation = "-"
     _validate_online_trial_form_rules(
         db,
         parcours_aller=payload.parcours_aller,
@@ -427,7 +471,7 @@ async def update_online_trial(
         materiel_concerne=payload.materiel_concerne,
         date_depart=payload.date_depart,
         vitesse=payload.vitesse,
-        mode_acheminement=_normalize_online_trial_mode(payload.mode_acheminement),
+        mode_acheminement=mode_for_validation,
         probleme=payload.probleme,
         etat_maintenance=payload.etat_maintenance.value,
         gravite=payload.gravite.value,
@@ -446,6 +490,8 @@ async def update_online_trial(
         or 0
     ) + 1
 
+    normalized_mode = mode_for_validation
+
     new_trial = OnlineTrialRequest(
         created_by_user_id=trial.created_by_user_id,
         dossier_number=trial.dossier_number,
@@ -463,7 +509,7 @@ async def update_online_trial(
         speed_kmh=payload.vitesse,
         parcours_aller=payload.parcours_aller,
         parcours_retour=payload.parcours_retour,
-        transport_mode=_normalize_online_trial_mode(payload.mode_acheminement),
+        transport_mode=normalized_mode,
         transport_type="",
         problem_description=payload.probleme.strip(),
         maintenance_state=payload.etat_maintenance,
@@ -557,14 +603,42 @@ async def create_online_trial_decision(
     decision_kind = payload.decision
     commentaire = (payload.commentaire or "").strip() or None
     existing_decision = trial.permanent_decision
+    material_count = _online_trial_material_count(trial)
+    now = _now_utc()
+    now_iso = now.isoformat()
 
     if decision_kind == "MODIFIER":
         if not commentaire:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Le message de modification est obligatoire",
+                detail="Le motif de modification est obligatoire",
             )
-        _add_trial_history(db, trial, AlertStatus.A_MODIFIER, current_user.id, commentaire)
+        if existing_decision:
+            previous_material_decisions = _parse_json_object(existing_decision.material_decisions)
+            updated_material_decisions: dict[str, dict] = {}
+            for index in range(material_count):
+                key = str(index)
+                current = dict(previous_material_decisions.get(key, {}))
+                updated_material_decisions[key] = {
+                    "ppm_status": "MODIFIEE",
+                    "ppm_reason": commentaire,
+                    "updated_at": now_iso,
+                    **{
+                        k: v
+                        for k, v in current.items()
+                        if k not in {"ppm_status", "ppm_reason", "updated_at"}
+                    },
+                }
+            existing_decision.permanent_user_id = current_user.id
+            existing_decision.comment = commentaire
+            existing_decision.material_decisions = json.dumps(updated_material_decisions)
+        _add_trial_history(
+            db,
+            trial,
+            AlertStatus.A_MODIFIER,
+            current_user.id,
+            commentaire,
+        )
         db.commit()
         trial = _get_online_trial_or_404(db, trial.id)
         await manager.broadcast(
@@ -579,10 +653,19 @@ async def create_online_trial_decision(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Le motif d'annulation est obligatoire",
             )
+        canceled_material_decisions = {
+            str(index): {
+                "ppm_status": "ANNULEE",
+                "ppm_reason": commentaire,
+                "updated_at": now_iso,
+            }
+            for index in range(material_count)
+        }
         if existing_decision:
             existing_decision.permanent_user_id = current_user.id
             existing_decision.decision = DecisionKind.ANNULER
             existing_decision.comment = commentaire
+            existing_decision.material_decisions = json.dumps(canceled_material_decisions)
         else:
             db.add(
                 OnlineTrialDecision(
@@ -590,10 +673,16 @@ async def create_online_trial_decision(
                     permanent_user_id=current_user.id,
                     decision=DecisionKind.ANNULER,
                     comment=commentaire,
-                    material_decisions=None,
+                    material_decisions=json.dumps(canceled_material_decisions),
                 )
             )
-        _add_trial_history(db, trial, AlertStatus.ANNULEE, current_user.id, commentaire)
+        _add_trial_history(
+            db,
+            trial,
+            AlertStatus.ANNULEE,
+            current_user.id,
+            commentaire,
+        )
         db.commit()
         trial = _get_online_trial_or_404(db, trial.id)
         await manager.broadcast(
@@ -602,56 +691,14 @@ async def create_online_trial_decision(
         )
         return trial
 
-    material_count = _online_trial_material_count(trial)
-    requested_accepted = sorted(set(payload.accepted_material_indexes))
-    requested_canceled = sorted(set(payload.canceled_material_indexes))
-
-    if any(index < 0 or index >= material_count for index in requested_accepted + requested_canceled):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Selection de materiels invalide")
-    if set(requested_accepted) & set(requested_canceled):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Un materiel ne peut pas etre accepte et annule en meme temps",
-        )
-    if not requested_accepted and not requested_canceled:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Selectionnez au moins un materiel a accepter ou annuler",
-        )
-
-    reasons_by_index: dict[int, Optional[str]] = {}
-    for item in payload.material_reason_updates:
-        if item.index in reasons_by_index:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Chaque materiel ne peut avoir qu'un seul motif PPM",
-            )
-        if item.index < 0 or item.index >= material_count:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Selection de materiels invalide")
-        reasons_by_index[item.index] = (item.motif_pm or "").strip() or None
-
-    now_iso = _now_utc().isoformat()
-    previous_material_decisions = _parse_json_object(existing_decision.material_decisions if existing_decision else None)
-    next_material_decisions: dict[str, dict] = {}
-    for index in range(material_count):
-        key = str(index)
-        current = dict(previous_material_decisions.get(key, {}))
-        if "ppm_status" not in current:
-            current["ppm_status"] = None
-        if "ppm_reason" not in current:
-            current["ppm_reason"] = None
-        if "updated_at" not in current:
-            current["updated_at"] = now_iso
-
-        if index in requested_accepted:
-            current["ppm_status"] = "ACCEPTEE"
-            current["updated_at"] = now_iso
-        elif index in requested_canceled:
-            current["ppm_status"] = "ANNULEE"
-            current["updated_at"] = now_iso
-        if index in reasons_by_index:
-            current["ppm_reason"] = reasons_by_index[index]
-        next_material_decisions[key] = current
+    next_material_decisions = {
+        str(index): {
+            "ppm_status": "ACCEPTEE",
+            "ppm_reason": None,
+            "updated_at": now_iso,
+        }
+        for index in range(material_count)
+    }
 
     if existing_decision:
         existing_decision.permanent_user_id = current_user.id
@@ -669,16 +716,9 @@ async def create_online_trial_decision(
             )
         )
 
-    trial.pm_reference_at = _now_utc()
-    all_canceled = all(
-        entry.get("ppm_status") == "ANNULEE" for entry in next_material_decisions.values()
-    )
-    if all_canceled:
-        next_status = AlertStatus.ANNULEE
-        status_note = commentaire or "Tous les materiels ont ete annules par le permanent."
-    else:
-        next_status = _compute_trial_status_from_progress(trial, next_material_decisions)
-        status_note = commentaire or "Demande d'essai analysee par le permanent."
+    trial.pm_reference_at = now
+    next_status = _compute_trial_status_from_progress(trial, next_material_decisions)
+    status_note = commentaire or "Demande d'essai analysee par le permanent."
 
     _add_trial_history(db, trial, next_status, current_user.id, status_note)
     db.commit()
@@ -730,6 +770,9 @@ async def update_online_trial_progress(
 
     material_decisions = _parse_json_object(trial.permanent_decision.material_decisions)
     progress = _parse_json_object(trial.trial_material_progress)
+    planned_departure = trial.departure_date
+    if planned_departure and planned_departure.tzinfo is None:
+        planned_departure = planned_departure.replace(tzinfo=timezone.utc)
     for update in payload.material_updates:
         if update.index not in accepted_set:
             raise HTTPException(
@@ -740,29 +783,51 @@ async def update_online_trial_progress(
         key = str(update.index)
         current = dict(progress.get(key, {}))
         realization = update.realization_date or update.return_date or update.departure_date
+        result_value = update.result
+        remarks_value = (update.remarks or "").strip() or None
         if realization and realization.tzinfo is None:
             realization = realization.replace(tzinfo=timezone.utc)
-        if update.performed and not realization:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="La date de realisation est obligatoire quand l'essai est marque comme realise",
-            )
         if not update.performed:
+            if result_value is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Le resultat ne peut etre renseigne que pour un essai realise",
+                )
             realization = None
+            result_value = None
+            remarks_value = None
+        else:
+            if not realization:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="La date de realisation est obligatoire quand l'essai est marque comme realise",
+                )
+            if result_value not in {"CONCLUANT", "NON_CONCLUANT"}:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Le champ Resultat est obligatoire (Concluant ou Non concluant)",
+                )
+            if result_value == "NON_CONCLUANT" and not remarks_value:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Le champ Observation est obligatoire pour un resultat Non concluant",
+                )
+            if result_value == "CONCLUANT":
+                remarks_value = None
 
-        pm_reference = _parse_iso_datetime(material_decisions.get(key, {}).get("updated_at")) or trial.pm_reference_at
         delay_minutes: Optional[int] = None
-        if update.performed and realization and pm_reference:
-            delay_minutes = int((realization - pm_reference).total_seconds() // 60)
+        if update.performed and realization and planned_departure:
+            delay_minutes = int((realization - planned_departure).total_seconds() // 60)
 
         current.update(
             {
                 "performed": bool(update.performed),
+                "result": result_value,
                 "realization_date": realization.isoformat() if realization else None,
                 "departure_date": None,
                 "return_date": None,
                 "delay_minutes": delay_minutes,
-                "remarks": (update.remarks or "").strip() or None,
+                "remarks": remarks_value,
                 "updated_at": _now_utc().isoformat(),
             }
         )

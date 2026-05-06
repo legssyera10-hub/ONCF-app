@@ -53,10 +53,9 @@ export function PermanentOnlineTrialDashboardPage() {
 
   useLiveAlerts(Boolean(token), load);
 
-  const filteredTrials = useMemo(
+  const trialsFilteredWithoutStatus = useMemo(
     () =>
       trials
-        .filter((item) => (selectedStatus !== "ALL" ? item.status === selectedStatus : true))
         .filter((item) => (selectedDate ? isSameLocalDate(item.created_at, selectedDate) : true))
         .filter((item) => {
           const query = search.trim().toLowerCase();
@@ -75,13 +74,23 @@ export function PermanentOnlineTrialDashboardPage() {
             .includes(query);
         })
         .sort((a, b) => getApiTimestamp(b.updated_at ?? b.created_at) - getApiTimestamp(a.updated_at ?? a.created_at)),
-    [trials, selectedStatus, selectedDate, search]
+    [trials, selectedDate, search]
   );
 
-  const pendingCount = trials.filter((item) => item.status === "EN_COURS_DE_TRAITEMENT").length;
-  const acceptedCount = trials.filter((item) => item.status === "TRAITEE_PAR_PM").length;
-  const modificationCount = trials.filter((item) => item.status === "A_MODIFIER").length;
-  const cancelledCount = trials.filter((item) => item.status === "ANNULEE").length;
+  const filteredTrials = useMemo(
+    () =>
+      trialsFilteredWithoutStatus.filter((item) =>
+        selectedStatus !== "ALL" ? item.status === selectedStatus : true
+      ),
+    [trialsFilteredWithoutStatus, selectedStatus]
+  );
+
+  const pendingCount = trialsFilteredWithoutStatus.filter((item) => item.status === "EN_COURS_DE_TRAITEMENT").length;
+  const acceptedCount = trialsFilteredWithoutStatus.filter((item) => item.status === "TRAITEE_PAR_PM").length;
+  const modificationCount = trialsFilteredWithoutStatus.filter((item) => item.status === "A_MODIFIER").length;
+  const cancelledCount = trialsFilteredWithoutStatus.filter((item) => item.status === "ANNULEE").length;
+  const modifieeCount = trialsFilteredWithoutStatus.filter((item) => item.status === "MODIFIEE").length;
+  const completedCount = trialsFilteredWithoutStatus.filter((item) => item.status === "RECEPTION_COMPLETE").length;
 
   return (
     <div className="space-y-6">
@@ -91,22 +100,42 @@ export function PermanentOnlineTrialDashboardPage() {
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Permanent PPM - Essais en ligne</p>
         <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Pilotage des demandes d'essai</h2>
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-xl border border-sky-200 bg-sky-50 p-3">
-            <p className="text-xs uppercase tracking-[0.18em] text-sky-700">En attente</p>
-            <p className="mt-2 text-2xl font-semibold text-sky-900">{pendingCount}</p>
+        <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(240px,300px)_minmax(0,1fr)]">
+          <div className={pendingCount > 0 ? "metric-card permanent-alert-card" : "metric-card"}>
+            <p className={pendingCount > 0 ? "text-xs uppercase tracking-[0.22em] text-rose-700" : "text-xs uppercase tracking-[0.22em] text-slate-400"}>
+              En cours de traitement
+            </p>
+            <p className={pendingCount > 0 ? "mt-3 text-3xl font-semibold text-rose-700" : "mt-3 text-3xl font-semibold text-slate-900"}>
+              {pendingCount}
+            </p>
+            <p className={pendingCount > 0 ? "mt-2 text-sm text-rose-600" : "mt-2 text-sm text-slate-500"}>
+              Demandes en attente d'instruction
+            </p>
           </div>
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-            <p className="text-xs uppercase tracking-[0.18em] text-emerald-700">Acceptees</p>
-            <p className="mt-2 text-2xl font-semibold text-emerald-900">{acceptedCount}</p>
-          </div>
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-            <p className="text-xs uppercase tracking-[0.18em] text-amber-700">A modifier</p>
-            <p className="mt-2 text-2xl font-semibold text-amber-900">{modificationCount}</p>
-          </div>
-          <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
-            <p className="text-xs uppercase tracking-[0.18em] text-rose-700">Annulees</p>
-            <p className="mt-2 text-2xl font-semibold text-rose-900">{cancelledCount}</p>
+
+          <div className="rounded-[1.2rem] bg-white p-4 shadow-sm">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                <p className="text-xs uppercase tracking-[0.18em] text-emerald-700">Acceptee</p>
+                <p className="mt-2 text-2xl font-semibold text-emerald-800">{acceptedCount}</p>
+              </div>
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+                <p className="text-xs uppercase tracking-[0.18em] text-rose-700">Annulations</p>
+                <p className="mt-2 text-2xl font-semibold text-rose-800">{cancelledCount}</p>
+              </div>
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <p className="text-xs uppercase tracking-[0.18em] text-amber-700">A modifier</p>
+                <p className="mt-2 text-2xl font-semibold text-amber-800">{modificationCount}</p>
+              </div>
+              <div className="rounded-xl border border-fuchsia-200 bg-fuchsia-50 p-3">
+                <p className="text-xs uppercase tracking-[0.18em] text-fuchsia-700">Modifiee</p>
+                <p className="mt-2 text-2xl font-semibold text-fuchsia-800">{modifieeCount}</p>
+              </div>
+              <div className="rounded-xl border border-teal-200 bg-teal-50 p-3">
+                <p className="text-xs uppercase tracking-[0.18em] text-teal-700">Essais realises</p>
+                <p className="mt-2 text-2xl font-semibold text-teal-800">{completedCount}</p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -144,7 +173,7 @@ export function PermanentOnlineTrialDashboardPage() {
             return next;
           })
         }
-        searchPlaceholder="ID dossier, createur, site ou materiel"
+        searchPlaceholder="Dossier, demandeur ou destinataire"
         statusValue={selectedStatus}
         statusOptions={getOnlineTrialStatusFilterOptions()}
         onStatusChange={(value) =>
@@ -155,7 +184,7 @@ export function PermanentOnlineTrialDashboardPage() {
             return next;
           })
         }
-        metrics={[{ label: "Dossiers", value: filteredTrials.length }]}
+        metrics={[{ label: "Dossiers trouves", value: filteredTrials.length }]}
       />
 
       <section className="space-y-4">
