@@ -11,7 +11,7 @@ import { formatDateTime } from "../utils/format";
 
 export function AdminAlertDetailPage() {
   const { token } = useAuth();
-  const { alertId } = useParams();
+  const { alertId, userId } = useParams();
   const navigate = useNavigate();
   const [alert, setAlert] = useState<Alert | null>(null);
   const [error, setError] = useState("");
@@ -24,6 +24,33 @@ export function AdminAlertDetailPage() {
       .then(setAlert)
       .catch((err) => setError(err instanceof Error ? err.message : "Erreur de chargement"));
   }, [token, alertId]);
+
+  function handleBack() {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+
+    if (userId && !Number.isNaN(Number(userId))) {
+      navigate(`/admin/users/${userId}`);
+      return;
+    }
+
+    const dashboardRestore = sessionStorage.getItem("admin-dashboard-restore");
+    if (dashboardRestore) {
+      try {
+        const parsed = JSON.parse(dashboardRestore) as { path?: string };
+        if (parsed.path) {
+          navigate(parsed.path);
+          return;
+        }
+      } catch {
+        // ignore and fallback below
+      }
+    }
+
+    navigate("/admin/accounts");
+  }
 
   if (error) {
     return <div className="panel border border-rose-200 p-6 text-sm text-rose-600">{error}</div>;
@@ -40,7 +67,7 @@ export function AdminAlertDetailPage() {
         <div>
           <button
             type="button"
-            onClick={() => navigate(-1)}
+            onClick={handleBack}
             className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-brand-700 transition hover:border-brand-200 hover:bg-brand-50"
           >
             <svg
@@ -79,7 +106,7 @@ export function AdminAlertDetailPage() {
                       setError("");
                       setMessage("");
                       await api.deleteAdminAlert(token, alert.id);
-                      navigate(-1);
+                      handleBack();
                     } catch (err) {
                       setError(err instanceof Error ? err.message : "Erreur suppression dossier");
                     } finally {

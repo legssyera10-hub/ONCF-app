@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from io import BytesIO
 import json
+import re
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -30,6 +31,7 @@ from app.models.app_setting import AppSetting
 from app.models.establishment import Establishment
 from app.models.enums import UserRole
 from app.models.online_trial import (
+    OnlineTrialAttachment,
     OnlineTrialDecision,
     OnlineTrialRequest,
     OnlineTrialStatusHistory,
@@ -390,7 +392,9 @@ def _online_trials_for_user(db: Session, user: User) -> list[OnlineTrialRequest]
         select(OnlineTrialRequest)
         .options(
             joinedload(OnlineTrialRequest.station),
-            joinedload(OnlineTrialRequest.created_by),
+            joinedload(OnlineTrialRequest.created_by).joinedload(User.establishment),
+            joinedload(OnlineTrialRequest.departure_station),
+            joinedload(OnlineTrialRequest.arrival_station),
             joinedload(OnlineTrialRequest.history).joinedload(OnlineTrialStatusHistory.changed_by),
             joinedload(OnlineTrialRequest.permanent_decision).joinedload(OnlineTrialDecision.permanent_user),
         )
@@ -415,6 +419,43 @@ def _filter_alerts_by_period(
     return [alert for alert in alerts if start <= alert.created_at.replace(tzinfo=None) < end]
 
 
+def _filter_online_trials_by_period(
+    trials: list[OnlineTrialRequest], start: Optional[datetime], end: Optional[datetime]
+) -> list[OnlineTrialRequest]:
+    if not start or not end:
+        return trials
+    return [trial for trial in trials if start <= trial.created_at.replace(tzinfo=None) < end]
+
+
+def _filter_establishment_alerts_by_transport_scope(
+    alerts: list[Alert], user: User, transport_scope: Optional[str]
+) -> list[Alert]:
+    if user.role != UserRole.ETABLISSEMENT:
+        return alerts
+    if not transport_scope:
+        return alerts
+
+    scope = transport_scope.strip().lower()
+    if scope not in {"created", "reception"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Valeur transport_scope invalide (created ou reception)",
+        )
+
+    establishment_id = user.establishment_id
+    if scope == "created":
+        return [alert for alert in alerts if alert.created_by_user_id == user.id]
+
+    if establishment_id is None:
+        return []
+    return [
+        alert
+        for alert in alerts
+        if alert.permanent_decision
+        and alert.permanent_decision.destination_establishment_id == establishment_id
+    ]
+
+
 def _format_delay_minutes(delay_minutes: Optional[int]) -> str:
     if delay_minutes is None:
         return ""
@@ -432,6 +473,27 @@ def _format_delay_minutes(delay_minutes: Optional[int]) -> str:
     if minutes or not parts:
         parts.append(f"{minutes}min")
     suffix = "retard" if delay_minutes > 0 else "avance"
+    return f"{' '.join(parts)} {suffix}"
+
+
+def _format_delay_minutes_tracking(delay_minutes: Optional[int]) -> str:
+    if delay_minutes is None:
+        return "-"
+    if delay_minutes == 0:
+        return "A l'heure"
+
+    total_minutes = abs(delay_minutes)
+    days = total_minutes // 1440
+    hours = (total_minutes % 1440) // 60
+    minutes = total_minutes % 60
+    parts: list[str] = []
+    if days > 0:
+        parts.append(f"{days}j")
+    if hours > 0:
+        parts.append(f"{hours}h")
+    if minutes > 0 or not parts:
+        parts.append(f"{minutes}min")
+    suffix = "de retard" if delay_minutes > 0 else "d'avance"
     return f"{' '.join(parts)} {suffix}"
 
 
@@ -522,6 +584,289 @@ def _build_instance_observation(confirmation: dict) -> str:
         )
 
     return ""
+
+
+def _to_technicentre_code(value: Optional[str]) -> str:
+    cleaned = re.sub(r"^technicentre\s+", "", (value or "").strip(), flags=re.IGNORECASE).upper()
+    return cleaned if cleaned in TECHNICENTRE_CODES else ""
+
+
+def _transport_ppm_state_label(value: str) -> str:
+    if value == "ACCEPTEE":
+        return "Acceptee"
+    if value == "A_MODIFIER":
+        return "A modifier"
+    if value == "ANNULEE":
+        return "Annulee"
+    if value == "MODIFIEE":
+        return "Modifiee"
+    return "En attente"
+
+
+def _transport_reception_label(value: str) -> str:
+    if value == "VALIDEE":
+        return "Validee"
+    if value == "EN_INSTANCE":
+        return "En instance"
+    return "Non confirmee"
+
+
+def _transport_status_label(value: str) -> str:
+    if value == "TRAITEE_PAR_PM":
+        return "Traitee par PPM"
+    if value == "A_MODIFIER":
+        return "A modifier"
+    if value == "MODIFIEE":
+        return "Modifiee"
+    if value == "ANNULEE":
+        return "Annulee"
+    if value == "RECEPTION_PARTIELLE":
+        return "Reception partielle"
+    if value == "RECEPTION_COMPLETE":
+        return "Reception complete"
+    return "En cours de traitement"
+
+
+def _online_trial_status_label(value: str) -> str:
+    if value == "TRAITEE_PAR_PM":
+        return "Traitee par PPM"
+    if value == "A_MODIFIER":
+        return "A modifier"
+    if value == "MODIFIEE":
+        return "Modifiee"
+    if value == "ANNULEE":
+        return "Annulee"
+    if value == "RECEPTION_COMPLETE":
+        return "Essai realise"
+    if value == "RECEPTION_PARTIELLE":
+        return "Traitee par PPM"
+    return "En cours de traitement"
+
+
+def _parse_iso_datetime_utc(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    normalized = value.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed
+    return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _build_transport_material_workbook(
+    user: User, alerts: list[Alert], period_label: str
+) -> BytesIO:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Suivi_Demandes"
+    headers = [
+        "Dossier",
+        "Date demande",
+        "Demandeur",
+        "Site de depart",
+        "Destinataire",
+        "Exploitant",
+        "Mode acheminement",
+        "Type acheminement",
+        "Etat demande (PPM)",
+        "Motif PPM (modification / annulation)",
+        "Statut",
+        "Confirmation reception",
+        "Date de reception",
+        "Date systeme de reception",
+        "Type materiel",
+        "Serie",
+        "Materiel concerne",
+        "Motif",
+        "Autre conditions",
+        "Observation",
+        "Retard",
+    ]
+    sheet.append(headers)
+
+    now_utc = datetime.utcnow()
+    for alert in alerts:
+        types = _split_joined_values(alert.material_type)
+        series = _split_joined_values(alert.material_ref)
+        concerned = _split_joined_values(alert.material_concerned)
+        material_count = max(len(types), len(series), len(concerned), 1)
+
+        confirmations = _parse_json_object(
+            alert.establishment_confirmation.material_confirmations
+            if alert.establishment_confirmation
+            else None
+        )
+        confirmed_indexes = _parse_confirmed_indexes(
+            alert.establishment_confirmation.confirmed_material_indexes
+            if alert.establishment_confirmation
+            else None
+        )
+        ppm_decisions = _parse_json_object(
+            alert.permanent_decision.material_decisions if alert.permanent_decision else None
+        )
+        global_ppm_status = (
+            "A_MODIFIER"
+            if alert.status.value == "A_MODIFIER"
+            else (
+                "MODIFIEE"
+                if alert.status.value == "MODIFIEE"
+                else ("ANNULEE" if alert.status.value == "ANNULEE" else None)
+            )
+        )
+
+        destination_requested = (
+            alert.requested_destination_establishment.code
+            if alert.requested_destination_establishment and alert.requested_destination_establishment.code
+            else (
+                alert.requested_destination_establishment.name
+                if alert.requested_destination_establishment
+                else ""
+            )
+        )
+        destination_retained = (
+            alert.permanent_decision.destination_establishment.code
+            if alert.permanent_decision
+            and alert.permanent_decision.destination_establishment
+            and alert.permanent_decision.destination_establishment.code
+            else (
+                alert.permanent_decision.destination_establishment.name
+                if alert.permanent_decision and alert.permanent_decision.destination_establishment
+                else ""
+            )
+        )
+        destination_displayed = _to_technicentre_code(destination_retained or destination_requested) or "-"
+
+        requester = (alert.created_by.full_name if alert.created_by and alert.created_by.full_name else "").strip()
+        if requester.lower().startswith("technicentre "):
+            requester = requester[len("technicentre ") :].strip() or requester
+        requester_code = _to_technicentre_code(requester)
+
+        request_date_value = alert.request_date or alert.created_at
+        request_date_label = request_date_value.strftime("%d/%m/%Y %H:%M")
+
+        global_ppm_reason = ""
+        if alert.history:
+            for item in sorted(alert.history, key=lambda it: it.changed_at, reverse=True):
+                if item.status.value in {"A_MODIFIER", "ANNULEE", "MODIFIEE"} and item.note:
+                    global_ppm_reason = item.note.strip()
+                    break
+
+        for index in range(material_count):
+            key = str(index)
+            confirmation = confirmations.get(key, {})
+            is_confirmed = bool(confirmation.get("confirmed")) or index in confirmed_indexes
+            raw_reception_status = confirmation.get("reception_status")
+            if raw_reception_status == "VALIDEE":
+                reception_state = "VALIDEE"
+            elif raw_reception_status == "EN_INSTANCE":
+                reception_state = "EN_INSTANCE"
+            elif is_confirmed:
+                reception_state = "VALIDEE"
+            else:
+                reception_state = "NOT_CONFIRMED"
+
+            raw_ppm_status = ppm_decisions.get(key, {}).get("ppm_status") or global_ppm_status or "PENDING"
+            is_cancelled = raw_ppm_status == "ANNULEE"
+            is_in_instance = reception_state == "EN_INSTANCE"
+            is_accepted_not_confirmed = raw_ppm_status == "ACCEPTEE" and reception_state == "NOT_CONFIRMED"
+            is_ppm_pending = raw_ppm_status == "PENDING"
+            has_final_reception = reception_state == "VALIDEE"
+            row_status = (
+                "ANNULEE"
+                if is_cancelled
+                else (
+                    "EN_COURS_DE_TRAITEMENT"
+                    if is_ppm_pending
+                    else (
+                        "RECEPTION_COMPLETE"
+                        if has_final_reception
+                        else ("TRAITEE_PAR_PM" if is_in_instance else ("TRAITEE_PAR_PM" if is_accepted_not_confirmed else alert.status.value))
+                    )
+                )
+            )
+
+            ppm_reason = ppm_decisions.get(key, {}).get("ppm_reason") or (
+                global_ppm_reason if raw_ppm_status in {"A_MODIFIER", "ANNULEE", "MODIFIEE"} else ""
+            )
+
+            row_reception_date = (
+                _format_datetime_excel(confirmation.get("reception_date"))
+                if has_final_reception
+                else ""
+            )
+            row_reception_system_date = ""
+            if has_final_reception:
+                confirmed_at_value = confirmation.get("confirmed_at")
+                if isinstance(confirmed_at_value, str):
+                    row_reception_system_date = _format_datetime_excel(confirmed_at_value)
+                elif is_confirmed and alert.establishment_confirmation and alert.establishment_confirmation.confirmed_at:
+                    row_reception_system_date = alert.establishment_confirmation.confirmed_at.strftime("%d/%m/%Y %H:%M")
+
+            delay_value = (
+                confirmation.get("delay_minutes")
+                if has_final_reception and isinstance(confirmation.get("delay_minutes"), int)
+                else None
+            )
+            if delay_value is None and is_confirmed and alert.establishment_confirmation:
+                delay_value = alert.establishment_confirmation.delay_minutes
+
+            delay_label = ""
+            if isinstance(delay_value, int):
+                delay_label = _format_delay_minutes_tracking(delay_value)
+            elif raw_ppm_status == "ACCEPTEE" and not has_final_reception:
+                ref_iso = ppm_decisions.get(key, {}).get("updated_at")
+                ref_datetime = _parse_iso_datetime_utc(ref_iso) if isinstance(ref_iso, str) else None
+                if not ref_datetime and alert.permanent_decision:
+                    ref_datetime = alert.permanent_decision.created_at.replace(tzinfo=None)
+                if ref_datetime:
+                    ongoing_minutes = int((now_utc - ref_datetime).total_seconds() // 60)
+                    delay_label = f"{_format_delay_minutes_tracking(ongoing_minutes)} (en cours)"
+
+            base_observation = confirmation.get("remarks") or (
+                alert.establishment_confirmation.remarks
+                if is_confirmed and alert.establishment_confirmation
+                else ""
+            )
+            instance_observation = _build_instance_observation(confirmation)
+            observation = " ".join(part for part in [base_observation, instance_observation] if part).strip()
+
+            sheet.append(
+                [
+                    f"#{alert.dossier_label or alert.id}",
+                    request_date_label,
+                    requester_code,
+                    alert.station.name if alert.station else "-",
+                    destination_displayed,
+                    alert.maintenance_state.value,
+                    alert.transport_mode,
+                    alert.transport_type,
+                    _transport_ppm_state_label(str(raw_ppm_status)),
+                    ppm_reason,
+                    _transport_status_label(row_status),
+                    _transport_reception_label(reception_state),
+                    row_reception_date,
+                    row_reception_system_date,
+                    types[index] if index < len(types) else (types[0] if types else "-"),
+                    series[index] if index < len(series) else (series[0] if series else "-"),
+                    concerned[index] if index < len(concerned) else (concerned[0] if concerned else "-"),
+                    alert.problem_description,
+                    alert.transport_conditions_initial or "-",
+                    observation,
+                    delay_label,
+                ]
+            )
+
+    for column_cells in sheet.columns:
+        max_length = max(len(str(cell.value or "")) for cell in column_cells)
+        sheet.column_dimensions[get_column_letter(column_cells[0].column)].width = min(max_length + 2, 40)
+
+    buffer = BytesIO()
+    workbook.save(buffer)
+    buffer.seek(0)
+    return buffer
 
 
 def _build_export_workbook(user: User, alerts: list[Alert], period_label: str) -> BytesIO:
@@ -747,6 +1092,164 @@ def _build_export_workbook(user: User, alerts: list[Alert], period_label: str) -
         for column_cells in sheet.columns:
             max_length = max(len(str(cell.value or "")) for cell in column_cells)
             sheet.column_dimensions[get_column_letter(column_cells[0].column)].width = min(max_length + 2, 40)
+
+    buffer = BytesIO()
+    workbook.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+
+def _online_trial_parcours_label(trial: OnlineTrialRequest) -> str:
+    if trial.parcours_aller and trial.parcours_retour:
+        return "Aller / Retour"
+    if trial.parcours_aller:
+        return "Aller"
+    if trial.parcours_retour:
+        return "Retour"
+    return "-"
+
+
+def _online_trial_creator_label(trial: OnlineTrialRequest) -> str:
+    if trial.created_by and trial.created_by.establishment and trial.created_by.establishment.code:
+        code = _to_technicentre_code(trial.created_by.establishment.code)
+        if code:
+            return code
+    if trial.created_by and trial.created_by.full_name:
+        code = _to_technicentre_code(trial.created_by.full_name)
+        if code:
+            return code
+    if trial.created_by and trial.created_by.username:
+        code = _to_technicentre_code(trial.created_by.username)
+        if code:
+            return code
+    return "-"
+
+
+def _build_online_trials_export_workbook(
+    user: User, trials: list[OnlineTrialRequest], period_label: str
+) -> BytesIO:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Suivi_Essais"
+    headers = [
+        "Dossier",
+        "Date demande",
+        "Createur",
+        "Parcours",
+        "De",
+        "Vers",
+        "Type materiel",
+        "Serie",
+        "Materiel concerne",
+        "Motif",
+        "Autres conditions",
+        "Exploitant",
+        "Statut",
+        "Decision PPM",
+        "Motif d'annulation/ modification",
+        "Resultat",
+        "Observation",
+        "Retard moyen",
+    ]
+    sheet.append(headers)
+
+    for trial in trials:
+        material_types = _split_joined_values(trial.material_type)
+        material_series = _split_joined_values(trial.material_ref)
+        concerned_materials = _split_joined_values(trial.material_concerned)
+        material_count = max(len(material_types), len(material_series), len(concerned_materials), 1)
+        progress_by_material = _parse_json_object(trial.trial_material_progress)
+        ppm_decisions = _parse_json_object(trial.permanent_decision.material_decisions if trial.permanent_decision else None)
+
+        global_cancel_reason = ""
+        if trial.history:
+            for item in sorted(trial.history, key=lambda it: it.changed_at, reverse=True):
+                if item.status.value in {"ANNULEE", "A_MODIFIER"} and item.note:
+                    global_cancel_reason = item.note.strip()
+                    break
+        if not global_cancel_reason:
+            global_cancel_reason = (trial.permanent_decision.comment if trial.permanent_decision else "") or ""
+
+        per_material_delays = [
+            entry.get("delay_minutes")
+            for entry in progress_by_material.values()
+            if isinstance(entry.get("delay_minutes"), int)
+        ]
+        average_delay = (
+            round(sum(per_material_delays) / len(per_material_delays))
+            if per_material_delays
+            else None
+        )
+
+        for index in range(material_count):
+            key = str(index)
+            progress_entry = progress_by_material.get(key, {})
+            performed = bool(progress_entry.get("performed"))
+            raw_result = progress_entry.get("result")
+            remarks = (
+                progress_entry.get("remarks").strip()
+                if isinstance(progress_entry.get("remarks"), str)
+                else ""
+            )
+            inferred_result = (
+                raw_result
+                if raw_result in {"CONCLUANT", "NON_CONCLUANT"}
+                else ("NON_CONCLUANT" if remarks else "CONCLUANT")
+            )
+            if not performed:
+                result_label = "-"
+                observation = "-"
+            else:
+                result_label = "Non Concluant" if inferred_result == "NON_CONCLUANT" else "Concluant"
+                observation = remarks if inferred_result == "NON_CONCLUANT" and remarks else "-"
+
+            ppm_reason = (
+                ppm_decisions.get(key, {}).get("ppm_reason")
+                if isinstance(ppm_decisions.get(key, {}).get("ppm_reason"), str)
+                else ""
+            )
+            cancel_or_modify_reason = (
+                ppm_reason
+                or (
+                    global_cancel_reason
+                    if trial.status.value in {"ANNULEE", "A_MODIFIER", "MODIFIEE"}
+                    else ""
+                )
+                or "-"
+            )
+
+            per_material_delay = (
+                progress_entry.get("delay_minutes")
+                if isinstance(progress_entry.get("delay_minutes"), int)
+                else average_delay
+            )
+
+            sheet.append(
+                [
+                    f"#{trial.dossier_label or trial.dossier_number or trial.id}",
+                    (trial.request_date or trial.created_at).strftime("%d/%m/%Y %H:%M"),
+                    _online_trial_creator_label(trial),
+                    _online_trial_parcours_label(trial),
+                    trial.departure_station.name if trial.departure_station else (trial.station.name if trial.station else "-"),
+                    trial.arrival_station.name if trial.arrival_station else (trial.station.name if trial.station else "-"),
+                    material_types[index] if index < len(material_types) else (material_types[0] if material_types else "-"),
+                    material_series[index] if index < len(material_series) else (material_series[0] if material_series else "-"),
+                    concerned_materials[index] if index < len(concerned_materials) else "-",
+                    trial.problem_description or "-",
+                    trial.transport_conditions_initial or "-",
+                    trial.maintenance_state.value,
+                    _online_trial_status_label(trial.status.value),
+                    trial.permanent_decision.decision.value if trial.permanent_decision else "-",
+                    cancel_or_modify_reason,
+                    result_label,
+                    observation,
+                    _format_delay_minutes_tracking(per_material_delay),
+                ]
+            )
+
+    for column_cells in sheet.columns:
+        max_length = max(len(str(cell.value or "")) for cell in column_cells)
+        sheet.column_dimensions[get_column_letter(column_cells[0].column)].width = min(max_length + 2, 40)
 
     buffer = BytesIO()
     workbook.save(buffer)
@@ -1103,6 +1606,7 @@ def export_user_excel(
     user_id: int,
     start_date: Optional[str] = Query(default=None),
     end_date: Optional[str] = Query(default=None),
+    transport_scope: Optional[str] = Query(default=None),
     period_type: Optional[str] = Query(default=None),
     year: Optional[int] = Query(default=None),
     month: Optional[int] = Query(default=None),
@@ -1120,9 +1624,47 @@ def export_user_excel(
     else:
         start, end, period_label = _legacy_period_range(period_type, year, month, week, day)
     alerts = _filter_alerts_by_period(_alerts_for_user(db, user), start, end)
-    workbook_stream = _build_export_workbook(user, alerts, period_label)
+    alerts = _filter_establishment_alerts_by_transport_scope(alerts, user, transport_scope)
+
+    if user.role == UserRole.ETABLISSEMENT:
+        workbook_stream = _build_transport_material_workbook(user, alerts, period_label)
+    else:
+        workbook_stream = _build_export_workbook(user, alerts, period_label)
 
     filename = f"{user.username}_{period_label}.xlsx"
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    return StreamingResponse(
+        workbook_stream,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
+    )
+
+
+@router.get("/users/{user_id}/online-trials/export")
+def export_user_online_trials_excel(
+    user_id: int,
+    start_date: Optional[str] = Query(default=None),
+    end_date: Optional[str] = Query(default=None),
+    period_type: Optional[str] = Query(default=None),
+    year: Optional[int] = Query(default=None),
+    month: Optional[int] = Query(default=None),
+    week: Optional[int] = Query(default=None),
+    day: Optional[str] = Query(default=None),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(UserRole.ADMIN)),
+) -> StreamingResponse:
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Compte introuvable")
+
+    if start_date or end_date:
+        start, end, period_label = _date_range(start_date, end_date)
+    else:
+        start, end, period_label = _legacy_period_range(period_type, year, month, week, day)
+    trials = _filter_online_trials_by_period(_online_trials_for_user(db, user), start, end)
+    workbook_stream = _build_online_trials_export_workbook(user, trials, period_label)
+
+    filename = f"{user.username}_essais_en_ligne_{period_label}.xlsx"
     headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
     return StreamingResponse(
         workbook_stream,
@@ -1276,5 +1818,65 @@ async def delete_alert_dossier(
 
     return AdminActionResponse(
         message=f"Dossier supprime ({len(deleted_alert_ids)} demande(s) retiree(s) de la base)"
+    )
+
+
+@router.delete("/online-trials/{trial_id}", response_model=AdminActionResponse)
+async def delete_online_trial_dossier(
+    trial_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(UserRole.ADMIN)),
+) -> AdminActionResponse:
+    trial = db.get(OnlineTrialRequest, trial_id)
+    if not trial:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dossier d'essai introuvable")
+
+    dossier_root_id = trial.dossier_root_id
+    dossier_number = trial.dossier_number
+    trials_to_delete = list(
+        db.execute(
+            select(OnlineTrialRequest).where(
+                or_(
+                    OnlineTrialRequest.id == dossier_root_id,
+                    OnlineTrialRequest.dossier_parent_id == dossier_root_id,
+                    OnlineTrialRequest.dossier_number == dossier_number,
+                )
+            )
+        ).scalars()
+    )
+    if not trials_to_delete:
+        trials_to_delete = [trial]
+
+    trials_to_delete.sort(key=lambda item: (item.id == dossier_root_id, -(item.dossier_iteration or 0)))
+    deleted_trial_ids = [item.id for item in trials_to_delete]
+
+    try:
+        db.execute(delete(OnlineTrialStatusHistory).where(OnlineTrialStatusHistory.trial_id.in_(deleted_trial_ids)))
+        db.execute(delete(OnlineTrialDecision).where(OnlineTrialDecision.trial_id.in_(deleted_trial_ids)))
+        db.execute(delete(OnlineTrialAttachment).where(OnlineTrialAttachment.trial_id.in_(deleted_trial_ids)))
+
+        for item in trials_to_delete:
+            db.execute(delete(OnlineTrialRequest).where(OnlineTrialRequest.id == item.id))
+
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Echec suppression dossier d'essai: {exc}",
+        ) from exc
+
+    await manager.broadcast(
+        "alerts",
+        {
+            "type": "online_trial_deleted",
+            "trial_id": trial_id,
+            "dossier_root_id": dossier_root_id,
+            "deleted_trial_ids": deleted_trial_ids,
+        },
+    )
+
+    return AdminActionResponse(
+        message=f"Dossier d'essai supprime ({len(deleted_trial_ids)} demande(s) retiree(s) de la base)"
     )
 

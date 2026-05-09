@@ -36,7 +36,6 @@ import {
   loadTrackingReceptionQualityPage,
   loadTrackingRequestsVisionPage,
   loadTrackingOnlineTrialsPage,
-  loadTrackingOnlineTrialsPerformancePage,
 } from "./routes/lazyRoutes";
 
 const AgentAlertDetailPage = lazy(loadAgentAlertDetailPage);
@@ -70,7 +69,6 @@ const TechnicentreRequestHistoryPage = lazy(loadTechnicentreRequestHistoryPage);
 const TrackingReceptionQualityPage = lazy(loadTrackingReceptionQualityPage);
 const TrackingRequestsVisionPage = lazy(loadTrackingRequestsVisionPage);
 const TrackingOnlineTrialsPage = lazy(loadTrackingOnlineTrialsPage);
-const TrackingOnlineTrialsPerformancePage = lazy(loadTrackingOnlineTrialsPerformancePage);
 
 function RouteFallback() {
   return <PageSkeleton />;
@@ -164,6 +162,7 @@ export default function App() {
       <Route path="/admin/users/:id" element={<RequireAuth roles={["ADMIN"]}><LazyPage><AdminUserDetailPage /></LazyPage></RequireAuth>} />
       <Route path="/admin/permanents/:target" element={<RequireAuth roles={["ADMIN"]}><LazyPage><AdminVirtualPermanentDetailPage /></LazyPage></RequireAuth>} />
       <Route path="/admin/users/:userId/alerts/:alertId" element={<RequireAuth roles={["ADMIN"]}><LazyPage><AdminAlertDetailPage /></LazyPage></RequireAuth>} />
+      <Route path="/admin/users/:userId/online-trials/:id" element={<RequireAuth roles={["ADMIN"]}><LazyPage><OnlineTrialDetailPage /></LazyPage></RequireAuth>} />
       <Route path="/permanent/dashboard" element={<RequireAuth roles={["PERMANENT"]}><LazyPage><PermanentDashboard /></LazyPage></RequireAuth>} />
       <Route path="/permanent/dashboard/:id" element={<RequireAuth roles={["PERMANENT"]}><LazyPage><PermanentAlertDetailPage /></LazyPage></RequireAuth>} />
       <Route path="/permanent/essais" element={<RequireAuth roles={["PERMANENT"]}><LazyPage><PermanentOnlineTrialDashboardPage /></LazyPage></RequireAuth>} />
@@ -172,7 +171,7 @@ export default function App() {
       <Route path="/tracking/requests" element={<RequireAuth roles={["SUIVI"]}><LazyPage><TrackingRequestsVisionPage /></LazyPage></RequireAuth>} />
       <Route path="/tracking/reception-quality" element={<RequireAuth roles={["SUIVI"]}><LazyPage><TrackingReceptionQualityPage /></LazyPage></RequireAuth>} />
       <Route path="/tracking/essais" element={<RequireAuth roles={["SUIVI"]}><LazyPage><TrackingOnlineTrialsPage /></LazyPage></RequireAuth>} />
-      <Route path="/tracking/essais/performance" element={<RequireAuth roles={["SUIVI"]}><LazyPage><TrackingOnlineTrialsPerformancePage /></LazyPage></RequireAuth>} />
+      <Route path="/tracking/essais/performance" element={<Navigate to="/tracking/essais" replace />} />
       <Route path="/tracking/all" element={<Navigate to="/tracking/requests" replace />} />
       <Route path="/tracking/dashboard" element={<Navigate to="/tracking/requests" replace />} />
       <Route path="/tracking/playback" element={<Navigate to="/tracking/requests" replace />} />

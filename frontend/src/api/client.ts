@@ -126,8 +126,12 @@ export const api = {
     request<void>(`/admin/users/${id}`, { method: "DELETE", token }),
   deleteAdminAlert: (token: string, id: number) =>
     request<void>(`/admin/alerts/${id}`, { method: "DELETE", token }),
+  deleteAdminOnlineTrial: (token: string, id: number) =>
+    request<void>(`/admin/online-trials/${id}`, { method: "DELETE", token }),
   exportAdminUser: (token: string, id: number, query: string) =>
     requestBlob(`/admin/users/${id}/export${query}`, { token }),
+  exportAdminUserOnlineTrials: (token: string, id: number, query: string) =>
+    requestBlob(`/admin/users/${id}/online-trials/export${query}`, { token }),
   createAdminEstablishment: (token: string, payload: AdminEstablishmentCreatePayload) =>
     request<{ establishment: Establishment }>("/admin/establishments", {
       method: "POST",

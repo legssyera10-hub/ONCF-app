@@ -10,6 +10,15 @@ const roleOptions: Role[] = ["ADMIN", "PERMANENT", "ETABLISSEMENT", "PROJET", "S
 type AdminPrimaryTab = "DASHBOARD" | "ACCOUNTS";
 type AccountsSecondaryTab = "CREATE" | "LIST";
 type VirtualPermanentTarget = "PV" | "PFL";
+type AdminDashboardRestoreState = {
+  path?: string;
+  scrollY?: number;
+  accountId?: number;
+  selectedCategory?: Role | "ALL";
+  accountQuery?: string;
+  accountsTab?: AccountsSecondaryTab;
+  virtualTarget?: VirtualPermanentTarget;
+};
 
 type VirtualPermanentAccount = {
   kind: "virtual";
@@ -181,14 +190,7 @@ export function AdminDashboard() {
     if (!savedState) return;
 
     try {
-      const parsed = JSON.parse(savedState) as {
-        path?: string;
-        scrollY?: number;
-        accountId?: number;
-        selectedCategory?: Role | "ALL";
-        accountQuery?: string;
-        accountsTab?: AccountsSecondaryTab;
-      };
+      const parsed = JSON.parse(savedState) as AdminDashboardRestoreState;
       if (parsed.path !== location.pathname) return;
 
       if (parsed.selectedCategory) {
@@ -210,6 +212,13 @@ export function AdminDashboard() {
           } else if (typeof parsed.scrollY === "number") {
             window.scrollTo({ top: parsed.scrollY, behavior: "auto" });
           }
+        } else if (parsed.virtualTarget === "PV" || parsed.virtualTarget === "PFL") {
+          const target = document.getElementById(`admin-virtual-account-row-${parsed.virtualTarget}`);
+          if (target) {
+            target.scrollIntoView({ block: "center", behavior: "auto" });
+          } else if (typeof parsed.scrollY === "number") {
+            window.scrollTo({ top: parsed.scrollY, behavior: "auto" });
+          }
         } else if (typeof parsed.scrollY === "number") {
           window.scrollTo({ top: parsed.scrollY, behavior: "auto" });
         }
@@ -221,22 +230,25 @@ export function AdminDashboard() {
     }
   }, [location.pathname, users]);
 
+  function persistDashboardRestore(extra: Partial<AdminDashboardRestoreState> = {}) {
+    const state: AdminDashboardRestoreState = {
+      path: location.pathname,
+      scrollY: window.scrollY,
+      selectedCategory,
+      accountQuery,
+      accountsTab,
+      ...extra,
+    };
+    sessionStorage.setItem(restoreKey, JSON.stringify(state));
+  }
+
   function openAccount(accountId: number) {
-    sessionStorage.setItem(
-      restoreKey,
-      JSON.stringify({
-        path: location.pathname,
-        scrollY: window.scrollY,
-        accountId,
-        selectedCategory,
-        accountQuery,
-        accountsTab,
-      }),
-    );
+    persistDashboardRestore({ accountId });
     navigate(`/admin/users/${accountId}`);
   }
 
   function openVirtualPermanent(target: VirtualPermanentTarget) {
+    persistDashboardRestore({ virtualTarget: target });
     navigate(`/admin/permanents/${target.toLowerCase()}`);
   }
 
@@ -362,6 +374,7 @@ export function AdminDashboard() {
                   establishment_id: "",
                 });
                 await loadUsers();
+                persistDashboardRestore();
                 navigate(`/admin/users/${created.id}`);
               } catch (err) {
                 setError(err instanceof Error ? err.message : "Erreur création compte");
@@ -506,6 +519,7 @@ export function AdminDashboard() {
               ) : (
                 <button
                   key={account.key}
+                  id={`admin-virtual-account-row-${account.target}`}
                   type="button"
                   onClick={() => openVirtualPermanent(account.target)}
                   className="panel w-full p-5 text-left transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50"

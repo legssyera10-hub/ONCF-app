@@ -40,6 +40,28 @@ export function AdminVirtualPermanentDetailPage() {
       .catch((err) => setError(err instanceof Error ? err.message : "Erreur chargement"));
   }, [token, normalizedTarget, isValidTarget]);
 
+  function handleBack() {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+
+    const dashboardRestore = sessionStorage.getItem("admin-dashboard-restore");
+    if (dashboardRestore) {
+      try {
+        const parsed = JSON.parse(dashboardRestore) as { path?: string };
+        if (parsed.path) {
+          navigate(parsed.path);
+          return;
+        }
+      } catch {
+        // ignore and fallback below
+      }
+    }
+
+    navigate("/admin/accounts");
+  }
+
   if (!isValidTarget) {
     return <div className="panel p-6 text-sm text-rose-600">Permanent cible invalide.</div>;
   }
@@ -50,9 +72,22 @@ export function AdminVirtualPermanentDetailPage() {
         <div>
           <button
             type="button"
-            onClick={() => navigate(-1)}
+            onClick={handleBack}
             className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-brand-700 transition hover:border-brand-200 hover:bg-brand-50"
           >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m15 18-6-6 6-6" />
+              <path d="M21 12H9" />
+            </svg>
             Retour
           </button>
           <h2 className="mt-2 text-2xl font-semibold text-slate-950">{permanentTitle}</h2>

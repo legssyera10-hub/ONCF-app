@@ -14,6 +14,7 @@ import {
   type OnlineTrialProgressEntry,
 } from "../utils/onlineTrialMaterials";
 import { getOnlineTrialStatusLabel } from "../utils/onlineTrialStatus";
+import { getOnlineTrialCreatorLabel } from "../utils/onlineTrialCreator";
 
 type PendingDecisionPayload = {
   decision: "CONFIRMER" | "ANNULER" | "MODIFIER";
@@ -106,6 +107,38 @@ export function PermanentOnlineTrialDetailPage() {
     [trial?.permanent_decision?.material_decisions]
   );
   const progress = useMemo(() => parseOnlineTrialProgress(trial?.trial_material_progress), [trial?.trial_material_progress]);
+  const trialResultSummary = useMemo(() => {
+    const performedEntries = materialRows
+      .map((row) => progress[row.index])
+      .filter((entry): entry is OnlineTrialProgressEntry => Boolean(entry?.performed));
+
+    if (performedEntries.length === 0) {
+      return {
+        value: null as "CONCLUANT" | "NON_CONCLUANT" | null,
+        label: "-",
+        observation: "",
+      };
+    }
+
+    const nonConcludingEntries = performedEntries.filter((entry) => inferTrialResult(entry) === "NON_CONCLUANT");
+    if (nonConcludingEntries.length === 0) {
+      return {
+        value: "CONCLUANT" as const,
+        label: "Concluant",
+        observation: "",
+      };
+    }
+
+    const uniqueObservations = nonConcludingEntries
+      .map((entry) => (entry.remarks ?? "").trim())
+      .filter((remark, index, all) => remark.length > 0 && all.indexOf(remark) === index);
+
+    return {
+      value: "NON_CONCLUANT" as const,
+      label: "Non concluant",
+      observation: uniqueObservations.length > 0 ? uniqueObservations.join(" | ") : "-",
+    };
+  }, [materialRows, progress]);
   const globalCancelOrModifyReason = useMemo(() => {
     if (!trial) return "";
     const historyReason =
@@ -125,6 +158,7 @@ export function PermanentOnlineTrialDetailPage() {
 
   const routeFrom = trial.departure_station?.name ?? trial.station.name ?? "-";
   const routeTo = trial.arrival_station?.name ?? "-";
+  const creatorLabel = getOnlineTrialCreatorLabel(trial);
   const dossierLabel = trial.dossier_label ?? String(trial.dossier_number ?? trial.id);
   const directionSuffix = getOnlineTrialDirectionTitleSuffix(trial);
   const parcoursLabel = getOnlineTrialParcoursLabel(trial);
@@ -220,6 +254,10 @@ export function PermanentOnlineTrialDetailPage() {
 
         <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Createur</p>
+            <p className="mt-2 text-sm font-semibold text-slate-900">{creatorLabel}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Mode d'essai</p>
             <p className="mt-2 text-sm font-semibold text-slate-900">{trial.transport_mode || "-"}</p>
           </div>
@@ -249,7 +287,46 @@ export function PermanentOnlineTrialDetailPage() {
               {trial.departure_date ? formatDateTime(trial.departure_date) : "-"}
             </p>
           </div>
+          <div
+            className={`rounded-2xl border p-4 ${
+              trialResultSummary.value === "CONCLUANT"
+                ? "border-emerald-300 bg-emerald-50"
+                : trialResultSummary.value === "NON_CONCLUANT"
+                  ? "border-rose-300 bg-rose-50"
+                  : "border-slate-200 bg-slate-50"
+            }`}
+          >
+            <p
+              className={`text-xs uppercase tracking-[0.18em] ${
+                trialResultSummary.value === "CONCLUANT"
+                  ? "text-emerald-700"
+                  : trialResultSummary.value === "NON_CONCLUANT"
+                    ? "text-rose-700"
+                    : "text-slate-500"
+              }`}
+            >
+              Resultat
+            </p>
+            <p
+              className={`mt-2 text-sm font-semibold ${
+                trialResultSummary.value === "CONCLUANT"
+                  ? "text-emerald-900"
+                  : trialResultSummary.value === "NON_CONCLUANT"
+                    ? "text-rose-900"
+                    : "text-slate-900"
+              }`}
+            >
+              {trialResultSummary.label}
+            </p>
+          </div>
         </div>
+
+        {trialResultSummary.value === "NON_CONCLUANT" ? (
+          <div className="mt-4 rounded-2xl border border-rose-300 bg-rose-50 p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-rose-700">Observation</p>
+            <p className="mt-2 text-sm font-medium text-rose-900">{trialResultSummary.observation || "-"}</p>
+          </div>
+        ) : null}
 
         <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
           <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Motif</p>

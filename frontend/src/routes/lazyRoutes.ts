@@ -100,11 +100,6 @@ export const loadPermanentOnlineTrialDetailPage = () =>
 export const loadTrackingOnlineTrialsPage = () =>
   import("../pages/TrackingOnlineTrialsPage").then((module) => ({ default: module.TrackingOnlineTrialsPage }));
 
-export const loadTrackingOnlineTrialsPerformancePage = () =>
-  import("../pages/TrackingOnlineTrialsPerformancePage").then((module) => ({
-    default: module.TrackingOnlineTrialsPerformancePage,
-  }));
-
 const routePreloaders: Array<[prefix: string, load: () => Promise<unknown>]> = [
   ["/login", loadLoginPage],
   ["/technicentre/reception/history/", loadTechnicentreReceptionDetailPage],
@@ -149,7 +144,6 @@ const routePreloaders: Array<[prefix: string, load: () => Promise<unknown>]> = [
   ["/essais/new", loadOnlineTrialNewPage],
   ["/essais/", loadOnlineTrialDetailPage],
   ["/essais", loadOnlineTrialDashboardPage],
-  ["/tracking/essais/performance", loadTrackingOnlineTrialsPerformancePage],
   ["/tracking/essais", loadTrackingOnlineTrialsPage],
   ["/tracking/reception-quality", loadTrackingReceptionQualityPage],
   ["/tracking/requests", loadTrackingRequestsVisionPage],

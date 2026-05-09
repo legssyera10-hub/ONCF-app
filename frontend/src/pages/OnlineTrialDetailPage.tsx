@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { StatusBadge } from "../components/StatusBadge";
 import { useAuth } from "../hooks/useAuth";
@@ -14,6 +14,7 @@ import {
   type OnlineTrialProgressEntry,
 } from "../utils/onlineTrialMaterials";
 import { getOnlineTrialStatusLabel } from "../utils/onlineTrialStatus";
+import { getOnlineTrialCreatorLabel } from "../utils/onlineTrialCreator";
 
 type TrialResultValue = "CONCLUANT" | "NON_CONCLUANT";
 
@@ -86,6 +87,9 @@ function getDisplayedPpmStatusClass(ppmStatus: string): string {
 }
 
 function getScope(pathname: string) {
+  if (pathname.startsWith("/admin/")) {
+    return { base: "", label: "Administration" };
+  }
   if (pathname.startsWith("/projet/")) {
     return { base: "/projet/essais", label: "Projet" };
   }
@@ -93,14 +97,16 @@ function getScope(pathname: string) {
 }
 
 export function OnlineTrialDetailPage() {
-  const { token } = useAuth();
-  const { id } = useParams();
+  const { token, user } = useAuth();
+  const { id, userId } = useParams();
+  const navigate = useNavigate();
   const location = useLocation();
   const scope = getScope(location.pathname);
   const [trial, setTrial] = useState<OnlineTrial | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [savingProgress, setSavingProgress] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [progressDraft, setProgressDraft] = useState<GlobalProgressDraft>(DEFAULT_PROGRESS_DRAFT);
 
   async function load() {
@@ -146,6 +152,38 @@ export function OnlineTrialDetailPage() {
     [trial?.permanent_decision?.material_decisions]
   );
   const progress = useMemo(() => parseOnlineTrialProgress(trial?.trial_material_progress), [trial?.trial_material_progress]);
+  const trialResultSummary = useMemo(() => {
+    const performedEntries = materialRows
+      .map((row) => progress[row.index])
+      .filter((entry): entry is OnlineTrialProgressEntry => Boolean(entry?.performed));
+
+    if (performedEntries.length === 0) {
+      return {
+        value: null as "CONCLUANT" | "NON_CONCLUANT" | null,
+        label: "-",
+        observation: "",
+      };
+    }
+
+    const nonConcludingEntries = performedEntries.filter((entry) => inferTrialResult(entry) === "NON_CONCLUANT");
+    if (nonConcludingEntries.length === 0) {
+      return {
+        value: "CONCLUANT" as const,
+        label: "Concluant",
+        observation: "",
+      };
+    }
+
+    const uniqueObservations = nonConcludingEntries
+      .map((entry) => (entry.remarks ?? "").trim())
+      .filter((remark, index, all) => remark.length > 0 && all.indexOf(remark) === index);
+
+    return {
+      value: "NON_CONCLUANT" as const,
+      label: "Non concluant",
+      observation: uniqueObservations.length > 0 ? uniqueObservations.join(" | ") : "-",
+    };
+  }, [materialRows, progress]);
 
   const acceptedIndexes = useMemo(
     () => materialRows.map((row) => row.index).filter((index) => pmDecisions[index]?.ppm_status === "ACCEPTEE"),
@@ -170,23 +208,105 @@ export function OnlineTrialDetailPage() {
 
   const routeFrom = trial.departure_station?.name ?? trial.station.name ?? "-";
   const routeTo = trial.arrival_station?.name ?? "-";
+  const creatorLabel = getOnlineTrialCreatorLabel(trial);
   const dossierLabel = trial.dossier_label ?? String(trial.dossier_number ?? trial.id);
   const directionSuffix = getOnlineTrialDirectionTitleSuffix(trial);
   const parcoursLabel = getOnlineTrialParcoursLabel(trial);
-  const canEditTrial = trial.status === "A_MODIFIER";
+  const isAdmin = user?.role === "ADMIN";
+  const canEditTrial = trial.status === "A_MODIFIER" && user?.role !== "ADMIN";
   const canShowDecisionAndFollowup = trial.status === "TRAITEE_PAR_PM";
+
+  function handleAdminBack() {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+
+    if (userId && !Number.isNaN(Number(userId))) {
+      navigate(`/admin/users/${userId}`);
+      return;
+    }
+
+    const dashboardRestore = sessionStorage.getItem("admin-dashboard-restore");
+    if (dashboardRestore) {
+      try {
+        const parsed = JSON.parse(dashboardRestore) as { path?: string };
+        if (parsed.path) {
+          navigate(parsed.path);
+          return;
+        }
+      } catch {
+        // ignore and fallback below
+      }
+    }
+
+    navigate("/admin/accounts");
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        {canEditTrial ? (
-          <>
-            <span className="btn-secondary cursor-not-allowed opacity-70">Modification disponible apres demande PPM</span>
-            <Link to={`${scope.base}/${trial.id}/edit`} className="btn-primary">
-              Modifier la demande
-            </Link>
-          </>
-        ) : null}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          {isAdmin ? (
+            <button
+              type="button"
+              onClick={handleAdminBack}
+              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-brand-700 transition hover:border-brand-200 hover:bg-brand-50"
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="m15 18-6-6 6-6" />
+                <path d="M21 12H9" />
+              </svg>
+              Retour
+            </button>
+          ) : null}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          {canEditTrial ? (
+            <>
+              <span className="btn-secondary cursor-not-allowed opacity-70">Modification disponible apres demande PPM</span>
+              <Link to={`${scope.base}/${trial.id}/edit`} className="btn-primary">
+                Modifier la demande
+              </Link>
+            </>
+          ) : null}
+          {isAdmin ? (
+            <button
+              type="button"
+              disabled={deleting}
+              className="btn bg-rose-600 text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={async () => {
+                if (!token || deleting) return;
+                if (!window.confirm(`Supprimer definitivement le dossier essai #${dossierLabel} ?`)) {
+                  return;
+                }
+                try {
+                  setDeleting(true);
+                  setError("");
+                  setMessage("");
+                  await api.deleteAdminOnlineTrial(token, trial.id);
+                  handleAdminBack();
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Erreur suppression dossier d'essai");
+                } finally {
+                  setDeleting(false);
+                }
+              }}
+            >
+              {deleting ? "Suppression..." : "Supprimer le dossier"}
+            </button>
+          ) : null}
+        </div>
       </div>
       {error ? <div className="panel border border-rose-200 p-4 text-sm text-rose-600">{error}</div> : null}
       {message ? <div className="panel border border-emerald-200 p-4 text-sm text-emerald-700">{message}</div> : null}
@@ -264,6 +384,10 @@ export function OnlineTrialDetailPage() {
 
         <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Createur</p>
+            <p className="mt-2 text-sm font-semibold text-slate-900">{creatorLabel}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Mode d'essai</p>
             <p className="mt-2 text-sm font-semibold text-slate-900">{trial.transport_mode || "-"}</p>
           </div>
@@ -295,7 +419,46 @@ export function OnlineTrialDetailPage() {
               {trial.departure_date ? formatDateTime(trial.departure_date) : "-"}
             </p>
           </div>
+          <div
+            className={`rounded-2xl border p-4 ${
+              trialResultSummary.value === "CONCLUANT"
+                ? "border-emerald-300 bg-emerald-50"
+                : trialResultSummary.value === "NON_CONCLUANT"
+                  ? "border-rose-300 bg-rose-50"
+                  : "border-slate-200 bg-slate-50"
+            }`}
+          >
+            <p
+              className={`text-xs uppercase tracking-[0.18em] ${
+                trialResultSummary.value === "CONCLUANT"
+                  ? "text-emerald-700"
+                  : trialResultSummary.value === "NON_CONCLUANT"
+                    ? "text-rose-700"
+                    : "text-slate-500"
+              }`}
+            >
+              Resultat
+            </p>
+            <p
+              className={`mt-2 text-sm font-semibold ${
+                trialResultSummary.value === "CONCLUANT"
+                  ? "text-emerald-900"
+                  : trialResultSummary.value === "NON_CONCLUANT"
+                    ? "text-rose-900"
+                    : "text-slate-900"
+              }`}
+            >
+              {trialResultSummary.label}
+            </p>
+          </div>
         </div>
+
+        {trialResultSummary.value === "NON_CONCLUANT" ? (
+          <div className="mt-4 rounded-2xl border border-rose-300 bg-rose-50 p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-rose-700">Observation</p>
+            <p className="mt-2 text-sm font-medium text-rose-900">{trialResultSummary.observation || "-"}</p>
+          </div>
+        ) : null}
 
         <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
           <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Motif</p>

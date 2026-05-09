@@ -67,10 +67,9 @@ function getNavigation(role?: string, pathname?: string): NavigationItem[] {
       ];
     case "SUIVI":
       return [
-        { to: "/tracking/requests", label: "Dashboard" },
+        { to: "/tracking/requests", label: "Acheminement" },
         { to: "/tracking/reception-quality", label: "Qualite reception" },
         { to: "/tracking/essais", label: "Suivi essais" },
-        { to: "/tracking/essais/performance", label: "Performance essais" },
       ];
     case "ADMIN":
       return [
@@ -254,7 +253,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       ETABLISSEMENT: ["/technicentre/acheminements", "/technicentre/reception", "/technicentre/demande", "/essais/history"],
       PROJET: ["/projet/essais/new", "/projet/essais/history"],
       PERMANENT: ["/permanent/map", "/permanent/essais"],
-      SUIVI: ["/tracking/requests", "/tracking/reception-quality", "/tracking/essais", "/tracking/essais/performance"],
+      SUIVI: ["/tracking/requests", "/tracking/reception-quality", "/tracking/essais"],
       ADMIN: ["/admin/accounts", "/admin/request-config"],
     };
 
@@ -369,8 +368,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                   className={`nav-pill-row ${user?.role === "ADMIN" || isTechnicentreRole ? "xl:justify-end" : ""}`}
                 >
                   {navigation.map((item) => {
-                    const isPermanentNavItem = user?.role === "PERMANENT" && !item.icon;
-                    const isPermanentEssaisButton = user?.role === "PERMANENT" && item.to === "/permanent/essais";
+                    const isSeparatedEssaisButton =
+                      (user?.role === "PERMANENT" && item.to === "/permanent/essais") ||
+                      (user?.role === "SUIVI" && item.to === "/tracking/essais");
                     const showTransportBadge =
                       user?.role === "PERMANENT" &&
                       item.to === "/permanent/dashboard" &&
@@ -393,7 +393,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                         onFocus={() => handlePreload(item.to)}
                         className={({ isActive }) => {
                           const forceActiveHome = isTechnicentreRole && item.icon === "home";
-                          return `nav-pill ${item.icon ? "nav-pill-with-icon" : ""} ${isPermanentNavItem ? "nav-pill-permanent" : ""} ${isPermanentEssaisButton ? "nav-pill-module-break" : ""} ${badgeLabel ? "relative" : ""} ${isActive || forceActiveHome ? "nav-pill-active" : "nav-pill-idle"}`;
+                          return `nav-pill ${item.icon ? "nav-pill-with-icon" : ""} ${isSeparatedEssaisButton ? "nav-pill-module-break" : ""} ${badgeLabel ? "relative" : ""} ${isActive || forceActiveHome ? "nav-pill-active" : "nav-pill-idle"}`;
                         }}
                       >
                         {item.icon === "home" ? (
