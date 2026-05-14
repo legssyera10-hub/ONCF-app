@@ -10,6 +10,11 @@ export function useLiveAlerts(
       return;
     }
 
+    if (import.meta.env.VITE_DISABLE_WS === "true") {
+      const intervalId = window.setInterval(onMessage, 30000);
+      return () => window.clearInterval(intervalId);
+    }
+
     const wsBase = (import.meta.env.VITE_API_URL ?? "http://localhost:8000").replace("http", "ws");
     const socket = new WebSocket(`${wsBase}/ws/alerts`);
     socket.onmessage = (event) => {
