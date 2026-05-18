@@ -1,18 +1,57 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+
+const DEFAULT_POLL_INTERVAL_MS = 3000;
+const MIN_POLL_INTERVAL_MS = 1000;
+
+function getPollingIntervalMs() {
+  const configured = Number(import.meta.env.VITE_LIVE_POLL_INTERVAL_MS);
+  if (Number.isFinite(configured) && configured >= MIN_POLL_INTERVAL_MS) {
+    return configured;
+  }
+  return DEFAULT_POLL_INTERVAL_MS;
+}
 
 export function useLiveAlerts(
   enabled: boolean,
   onMessage: () => void,
   onEvent?: (payload: Record<string, unknown>) => void
 ) {
+  const onMessageRef = useRef(onMessage);
+  const onEventRef = useRef(onEvent);
+
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+    onEventRef.current = onEvent;
+  }, [onEvent, onMessage]);
+
   useEffect(() => {
     if (!enabled) {
       return;
     }
 
     if (import.meta.env.VITE_DISABLE_WS === "true") {
-      const intervalId = window.setInterval(onMessage, 30000);
-      return () => window.clearInterval(intervalId);
+      const refresh = () => {
+        if (document.visibilityState === "hidden") {
+          return;
+        }
+        onMessageRef.current();
+      };
+
+      const intervalId = window.setInterval(refresh, getPollingIntervalMs());
+      const refreshWhenVisible = () => {
+        if (document.visibilityState === "visible") {
+          refresh();
+        }
+      };
+
+      window.addEventListener("focus", refresh);
+      document.addEventListener("visibilitychange", refreshWhenVisible);
+
+      return () => {
+        window.clearInterval(intervalId);
+        window.removeEventListener("focus", refresh);
+        document.removeEventListener("visibilitychange", refreshWhenVisible);
+      };
     }
 
     const wsBase = (import.meta.env.VITE_API_URL ?? "http://localhost:8000").replace("http", "ws");
@@ -24,8 +63,8 @@ export function useLiveAlerts(
       } catch {
         payload = {};
       }
-      onEvent?.(payload);
-      onMessage();
+      onEventRef.current?.(payload);
+      onMessageRef.current();
     };
     socket.onopen = () => socket.send("subscribe");
 
@@ -34,5 +73,5 @@ export function useLiveAlerts(
         socket.close();
       }
     };
-  }, [enabled, onEvent, onMessage]);
+  }, [enabled]);
 }
