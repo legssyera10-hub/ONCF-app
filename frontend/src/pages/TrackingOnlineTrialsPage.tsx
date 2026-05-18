@@ -218,6 +218,26 @@ function getDossierSortNumber(trial: OnlineTrial) {
   return trial.id;
 }
 
+function normalizeDossierSearchValue(value: string) {
+  return normalize(value).replace(/^#/, "").replace(/\s+/g, "");
+}
+
+function matchesDossierSearch(trial: OnlineTrial, queryValue: string) {
+  const normalizedQuery = normalizeDossierSearchValue(queryValue.trim());
+  if (!normalizedQuery) return true;
+
+  const dossierLabel = normalizeDossierSearchValue(trial.dossier_label ?? "");
+  const dossierNumber =
+    typeof trial.dossier_number === "number" && Number.isFinite(trial.dossier_number)
+      ? String(trial.dossier_number)
+      : "";
+  const fallbackNumber = String(getDossierSortNumber(trial));
+
+  return [dossierLabel, dossierNumber, fallbackNumber]
+    .filter(Boolean)
+    .some((value) => value === normalizedQuery || value.startsWith(`${normalizedQuery}(`));
+}
+
 function toCsvCell(value: unknown) {
   const text = String(value ?? "").replace(/"/g, '""');
   return `"${text}"`;
@@ -449,24 +469,7 @@ export function TrackingOnlineTrialsPage() {
           ) {
             return false;
           }
-          const normalizedQuery = normalize(query.trim());
-          if (!normalizedQuery) return true;
-          const searchIndex = [
-            trial.id,
-            trial.dossier_label,
-            trial.dossier_number,
-            getOnlineTrialCreatorLabel(trial),
-            getTrialDepartureStationName(trial),
-            getTrialArrivalStationName(trial),
-            row.materialType,
-            row.materialSerie,
-            row.materialConcerned,
-            trial.problem_description,
-            trial.transport_conditions_initial,
-          ]
-            .join(" ")
-            .toLowerCase();
-          return normalize(searchIndex).includes(normalizedQuery);
+          return matchesDossierSearch(trial, query);
         })
         .sort((a, b) => {
           const dossierDiff = getDossierSortNumber(b.trial) - getDossierSortNumber(a.trial);
@@ -904,7 +907,7 @@ export function TrackingOnlineTrialsPage() {
           {!filtersOpen ? (
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
-                Recherche: {query.trim() ? `"${query.trim()}"` : "Aucune"}
+                Dossier: {query.trim() ? `"${query.trim()}"` : "Tous"}
               </span>
               <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
                 Parcours:{" "}
@@ -949,7 +952,7 @@ export function TrackingOnlineTrialsPage() {
                   <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Recherche dossier</span>
                   <input
                     className="input"
-                    placeholder="Dossier, createur, station, materiel..."
+                    placeholder="Numero dossier, ex: 11"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                   />
